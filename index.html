@@ -8,8 +8,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Tryouts">
-<title>AHS Tryout Tracker</title>
+<meta name="apple-mobile-web-app-title" content="AHS Roster">
+<title>AHS 2026-27 Roster</title>
 <style>
 /* ---------- tokens ---------- */
 :root{
@@ -818,7 +818,7 @@ th.filtered .th-lbl{color:var(--accent)}
   <header class="topbar">
     <div class="brand">
       <div class="crest" id="crest">AHS</div>
-      <input class="season-name" id="seasonName" value="Tryouts" aria-label="Season name" spellcheck="false">
+      <input class="season-name" id="seasonName" value="Roster" aria-label="Season name" spellcheck="false">
     </div>
 
     <div class="menu-wrap">
@@ -968,7 +968,7 @@ t.sheetStubs=true}if(t.type=="array"){t.type="binary";var a=xk(e,t);t.type="arra
 </script>
 <script>
 /* =========================================================================
-   AHS Tryout Tracker — attendance + evaluation front end for the tryout
+   AHS 2026-27 Roster — attendance + evaluation front end for the tryout
    workbook. Runs entirely from a local file. No server, no install.
    ========================================================================= */
 (function () {
@@ -1101,7 +1101,7 @@ function loadIndex() {
   try { IDX = JSON.parse(lsGet(IDX_KEY)); } catch (e) { IDX = null; }
   if (!IDX || !Array.isArray(IDX.seasons) || !IDX.seasons.length) {
     const yr = String(new Date().getFullYear());
-    IDX = { active: yr, seasons: [{ id: yr, label: 'AHS ' + yr + ' Tryouts' }] };
+    IDX = { active: yr, seasons: [{ id: yr, label: 'AHS ' + yr + ' Roster' }] };
     saveIndex();
   }
   return IDX;
@@ -1112,7 +1112,7 @@ function loadSeason(id) {
   let s = null;
   try { s = JSON.parse(lsGet(NS + id)); } catch (e) { s = null; }
   const entry = IDX.seasons.find(x => x.id === id);
-  if (!s) s = blankSeason(id, entry ? entry.label : 'AHS ' + id + ' Tryouts');
+  if (!s) s = blankSeason(id, entry ? entry.label : 'AHS ' + id + ' Roster');
   return migrate(s);
 }
 function migrate(s) {
@@ -2932,7 +2932,7 @@ function applyImport(res, mode) {
 
 function restoreBackup(data) {
   const seasons = Array.isArray(data.seasons) ? data.seasons : (data.seasonId ? [data] : null);
-  if (!seasons) return modalMessage('Not a backup file', 'That JSON does not look like a Tryout Tracker backup.');
+  if (!seasons) return modalMessage('Not a backup file', 'That JSON does not look like a roster backup from this app.');
   seasons.forEach(s => {
     const m = migrate(s);
     let id = m.seasonId;
@@ -3915,7 +3915,7 @@ function backupJSON() {
     if (e.id === S.seasonId) return S;
     try { return JSON.parse(lsGet(NS + e.id)); } catch (x) { return null; }
   }).filter(Boolean);
-  const payload = { app: 'AHS Tryout Tracker', schemaVersion: SCHEMA, exportedAt: new Date().toISOString(), seasons: seasons };
+  const payload = { app: 'AHS 2026-27 Roster', schemaVersion: SCHEMA, exportedAt: new Date().toISOString(), seasons: seasons };
   const ok = saveBlob(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }),
     'tryout-tracker-backup-' + todayISO() + '.json');
   if (!ok) return rescueModal();
@@ -3935,7 +3935,7 @@ function rescueModal() {
     title: 'This browser blocked the download',
     intro: 'Copy the text below into a file named backup.json — it holds everything.',
     body: '<textarea class="diag" style="width:100%;height:32vh" readonly id="rescueText">' +
-      esc(JSON.stringify({ app: 'AHS Tryout Tracker', schemaVersion: SCHEMA, seasons: seasons })) + '</textarea>',
+      esc(JSON.stringify({ app: 'AHS 2026-27 Roster', schemaVersion: SCHEMA, seasons: seasons })) + '</textarea>',
     foot: '<button class="btn primary" data-act="copyrescue">Copy to clipboard</button>' +
           '<button class="btn" data-act="closemodal">Close</button>'
   });
@@ -4449,7 +4449,7 @@ function sheetsHelp() {
       '</ol>' +
       '<p class="muted" style="margin:10px 0 4px"><strong>Adding the rest of the staff, later</strong></p>' +
       '<ol class="steps">' +
-        '<li>Send each coach a copy of <strong>AHS Tryout Tracker.html</strong> — the same file, nothing to install.</li>' +
+        '<li>Send each coach a copy of <strong>AHS 2026-27 Roster.html</strong> — the same file, nothing to install.</li>' +
         '<li>Give them the web app URL and the token privately (not in the Sheet itself).</li>' +
         '<li>They paste both into Settings, tick the same box, and choose <strong>Load the Sheet</strong>.</li>' +
         '<li>Have each of them set their own name under the coach button, so notes and saves are attributed.</li>' +
@@ -4480,7 +4480,7 @@ function newSeason() {
   let id = yr, n = 2;
   while (IDX.seasons.some(s => s.id === id)) id = yr + '-' + (n++);
   persist();
-  const label = 'AHS ' + id + ' Tryouts';
+  const label = 'AHS ' + id + ' Roster';
   IDX.seasons.push({ id: id, label: label });
   IDX.active = id;
   saveIndex();

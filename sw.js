@@ -1,4 +1,4 @@
-/* AHS Tryout Tracker — service worker.
+/* AHS 2026-27 Roster — service worker.
  *
  * Its whole job is that a coach standing on a field with no signal can still
  * open the app and mark a roster. The app itself is one file, so "offline"
@@ -13,7 +13,7 @@
  *
  * CACHE is stamped at build time, so a new build cannot be served the old file.
  */
-const CACHE = 'ahs-tryouts-20260901-121421';
+const CACHE = 'ahs-tryouts-20260901-123232';
 const SHELL = [
   './',
   './index.html',

@@ -1,8 +1,13 @@
-# AHS Tryout Tracker
+# AHS 2026-27 Roster
 
-Attendance and evaluations for high-school athletic tryouts, as a single-page
+Roster, attendance and evaluations for high-school athletics, as a single-page
 web app that installs to a phone or tablet home screen and keeps working with
 no signal.
+
+> The repository is still named `ahs-tryout-tracker`. That name is baked into
+> the address below, and GitHub Pages does not redirect a renamed repository —
+> changing it would break every link already shared and every copy already
+> installed on someone's home screen. The app is what got renamed.
 
 **Open it:** https://opencdlee-dotcom.github.io/ahs-tryout-tracker/
 

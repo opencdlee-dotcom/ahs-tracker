@@ -1,7 +1,7 @@
 {
-  "name": "AHS Tryout Tracker",
-  "short_name": "Tryouts",
-  "description": "Attendance and evaluations for high-school athletic tryouts.",
+  "name": "AHS 2026-27 Roster",
+  "short_name": "AHS Roster",
+  "description": "Roster, attendance and evaluations for high-school athletics.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
