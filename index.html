@@ -4685,8 +4685,6 @@ function buildSaveMenu(menu) {
       ? '<button data-act="pushsheets">Save to the Google Sheet<span class="mi-sub">' +
           'Everyone working from this Sheet gets it' +
           (S.sheetsPushedAt ? ' — last saved ' + esc(stamp(S.sheetsPushedAt)) : '') + '</span></button>' +
-        '<button data-act="sheetspull">Load from the Google Sheet<span class="mi-sub">' +
-          'Brings in what the other coaches have saved</span></button>' +
         '<div class="sep"></div>'
       : '') +
     '<button data-act="expxlsx">' + (inPlace ? 'Save to ' + esc(fileHandleName) : 'Save workbook (.xlsx)') +
@@ -4833,7 +4831,7 @@ document.addEventListener('click', e => {
     case 'mergesheetspull': closeModal(); pullFromSheets({ merge: true }); break;
     case 'sheetscheck': closeMenus(); sheetsChipClicked(); break;
     case 'install': doInstall(); break;
-    case 'opensheet': openSheetDoc(); break;
+    case 'viewsheet': openSheetDoc(); break;
     case 'openfile':  closeMenus(); openViaPicker(); break;
     case 'opensheetsearch': {
       const dest = el.dataset.v || '';
@@ -4986,12 +4984,23 @@ $('#addBar').addEventListener('submit', e => {
    never touches Sheets. Once a Sheet exists there are two, and it offers both. */
 function knowsASheet() { return !!(S.sheetDocUrl || S.sheetsUrl); }
 
+/* Open means "load a roster into this screen", whichever source it comes from.
+   Going off to look at the Sheet in Google is a different thing entirely, so it
+   sits below the line and is labelled as leaving. */
 function buildOpenMenu(menu) {
+  const canLoad = !!S.sheetsUrl;          // needs the bridge, not just an address
+  const canView = !!(S.sheetDocUrl || S.sheetsUrl);
   menu.innerHTML =
     '<button data-act="openfile">Open a spreadsheet…' +
       '<span class="mi-sub">An .xlsx, .csv or a backup .json on this device</span></button>' +
-    '<button data-act="opensheet">Open the Google Sheet ↗' +
-      '<span class="mi-sub">' + esc(sheetDocLabel()) + ' — opens in a browser tab</span></button>';
+    (canLoad
+      ? '<button data-act="sheetspull">Open the Google Sheet' +
+        '<span class="mi-sub">Loads ' + esc(sheetDocLabel()) + ' into this screen</span></button>'
+      : '') +
+    (canView
+      ? '<div class="sep"></div><button data-act="viewsheet">View in Google Sheets ↗' +
+        '<span class="mi-sub">Leaves the tracker and opens the Sheet in a browser tab</span></button>'
+      : '');
 }
 
 $('#openBtn').addEventListener('click', e => {
