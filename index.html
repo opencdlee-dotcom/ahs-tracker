@@ -3527,11 +3527,23 @@ async function sheetsCall(action, body) {
    reply carries that address, and it is remembered here — which is what lets
    the tracker offer to open the Sheet without anyone pasting a second link. */
 function noteSheetDoc(data) {
-  if (!data || !data.sheetUrl) return;
-  if (S.sheetDocUrl === data.sheetUrl && S.sheetDocName === (data.sheetName || '')) return;
-  S.sheetDocUrl = data.sheetUrl;
-  S.sheetDocName = data.sheetName || '';
-  persist();
+  if (!data) return;
+  if (data.sheetUrl) {
+    if (S.sheetDocUrl === data.sheetUrl && S.sheetDocName === (data.sheetName || '')) return;
+    S.sheetDocUrl = data.sheetUrl;
+    S.sheetDocName = data.sheetName || '';
+    persist();
+    return;
+  }
+  /* An older bridge script does not send the address, but its greeting does
+     name the Sheet — 'Bridge is live on "AHS 2026 Tryouts"'. That name is
+     enough to take somebody to the right file, so nobody ends up at a dead
+     end just because their script is a version behind. */
+  const named = /live on ["“]([^"”]+)["”]/.exec(String(data.ping || ''));
+  if (named && named[1] && S.sheetDocName !== named[1]) {
+    S.sheetDocName = named[1];
+    persist();
+  }
 }
 
 /** Only ever a Google Sheets address, and only ever https. */
@@ -3546,21 +3558,32 @@ function sheetDocLabel() {
 /** Opens the Sheet itself in a browser tab. */
 function openSheetDoc() {
   closeMenus();
-  if (!S.sheetDocUrl) {
-    return openModal({
-      title: 'The Sheet’s address is not known yet',
-      intro: 'The tracker learns where the Sheet is from the bridge script, and this one has not told it yet.',
-      body: '<div class="warnbox">Press <strong>Test connection</strong> in Settings. If that still does not ' +
-            'find it, the script in your Sheet is an older copy — paste in the current ' +
-            '<strong>Google Sheets Bridge.gs</strong> and re-deploy it as a <strong>New version</strong>.</div>' +
-            '<p class="muted">Or just paste the Sheet’s own address into Settings by hand — open the ' +
-            'Sheet in Google, copy the address bar, and put it in the "Sheet address" box.</p>',
-      foot: '<button class="btn" data-act="closemodal">Close</button>' +
-            '<button class="btn primary" data-act="settings">Open settings</button>'
-    });
-  }
+  if (!S.sheetDocUrl) return openSheetsByName();
   window.open(S.sheetDocUrl, '_blank', 'noopener,noreferrer');
   toast('Opening ' + sheetDocLabel() + ' in Google Sheets', 3500);
+}
+
+/* No exact address — an older bridge script, or none set up at all. Rather
+   than refusing, take them to Google Sheets, searching for the Sheet by name
+   when we know it. One extra click instead of a dead end. */
+function openSheetsByName() {
+  const name = S.sheetDocName;
+  const dest = name
+    ? 'https://drive.google.com/drive/search?q=' + encodeURIComponent(name)
+    : 'https://docs.google.com/spreadsheets/u/0/';
+  openModal({
+    title: name ? 'Opening Google Sheets for “' + esc(name) + '”' : 'Opening Google Sheets',
+    intro: name
+      ? 'This tracker knows the Sheet is called “' + esc(name) + '” but not its exact address, so ' +
+        'it will search your Google Drive for it.'
+      : 'No Google Sheet has been connected to this tracker yet, so this just opens Google Sheets.',
+    body: '<p class="muted">To make it one click next time, open the Sheet in Google, copy the address ' +
+          'from the browser bar, and paste it into <strong>Settings ▸ Google Sheets ▸ Sheet address</strong>. ' +
+          'Re-deploying the bridge script does the same thing automatically.</p>',
+    foot: '<button class="btn" data-act="closemodal">Cancel</button>' +
+          '<button class="btn" data-act="settings">Paste the address</button>' +
+          '<button class="btn primary" data-act="opensheetsearch" data-v="' + esc(dest) + '">Open Google Sheets ↗</button>'
+  });
 }
 
 /** The workbook, as tab-and-rows the script can drop straight into the Sheet. */
@@ -4812,6 +4835,15 @@ document.addEventListener('click', e => {
     case 'install': doInstall(); break;
     case 'opensheet': openSheetDoc(); break;
     case 'openfile':  closeMenus(); openViaPicker(); break;
+    case 'opensheetsearch': {
+      const dest = el.dataset.v || '';
+      closeModal();
+      // Google's own domains only — this value is built here, never pasted in.
+      if (/^https:\/\/(docs|drive)\.google\.com\//.test(dest)) {
+        window.open(dest, '_blank', 'noopener,noreferrer');
+      }
+      break;
+    }
     case 'expxlsx':  closeMenus(); exportWorkbook(); break;
     case 'expjson':  closeMenus(); backupJSON(); break;
     case 'expcsv':   closeMenus(); exportCSV(); break;
@@ -5260,7 +5292,7 @@ window.AHS = {
   activeDay: () => activeDay, applyImport: applyImport, newSeason: newSeason, switchSeason: switchSeason, redo: redo,
   linkedFile: () => fileHandleName,
   installState: installState, applyAddbar: applyAddbar, toggleAddbar: toggleAddbar,
-  openSheetDoc: openSheetDoc, validSheetDocUrl: validSheetDocUrl,
+  openSheetDoc: openSheetDoc, validSheetDocUrl: validSheetDocUrl, _noteSheetDoc: noteSheetDoc,
   _setHandle: h => { fileHandle = h; fileHandleName = h ? h.name : ''; }
 };
 })();
