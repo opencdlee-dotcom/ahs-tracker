@@ -598,7 +598,15 @@ th.c-cc,td.c-cc{width:120px;max-width:170px}
 
 
 /* ---------- column header menu + drag ---------- */
-th.sortable{position:relative}
+/* MUST stay sticky, not relative. "th.sortable" is a class-plus-element
+   selector, so it outranks the "thead th{position:sticky;top:0}" above no
+   matter what order they sit in — and every header is sortable. Setting it to
+   relative therefore did two things at once: the header row stopped sticking
+   when the roster scrolled, and "left:var(--idw)" on the Student column turned
+   from a pin into a 64px nudge, pushing that one label off its own column.
+   Sticky is also a containing block for absolute children, so the menu button
+   and drag affordances that wanted "relative" are unaffected. */
+th.sortable{position:sticky}
 .th-menu{
   width:18px;height:18px;margin-left:2px;border-radius:4px;
   color:var(--faint);font-size:11px;line-height:1;
@@ -1073,6 +1081,8 @@ function blankSeason(id, label, source) {
     sheetsPulledAt: '',
     sheetsBy: '',
     sheetsPoll: 20,        // seconds between "has anyone else saved?" checks
+    sheetDocUrl: '',       // the Sheet itself, for "open it in Google"
+    sheetDocName: '',
     layout: null,
     customCols: [],
     view: { order: [], hidden: {}, pick: {} },
@@ -1125,6 +1135,8 @@ function migrate(s) {
   s.sheetsPulledAt = s.sheetsPulledAt || '';
   s.sheetsBy = s.sheetsBy || '';
   s.sheetsPoll = Math.min(300, Math.max(10, Number(s.sheetsPoll) || 20));
+  s.sheetDocUrl = s.sheetDocUrl || '';
+  s.sheetDocName = s.sheetDocName || '';
   s.layout = s.layout || null;
   s.view = (s.view && typeof s.view === 'object') ? s.view : { order: [], hidden: {} };
   s.view.order = Array.isArray(s.view.order) ? s.view.order : [];
@@ -1422,8 +1434,18 @@ function renderSaveChip() {
     const linked = !!fileHandleName;
     tgtName.textContent = saveTargetLabel();
     tgt.className = 'chip target' + (linked || sheetsOn() ? ' linked' : '');
+
+    /* The chip names where Save goes, so clicking it should take you there.
+       In Sheets mode that means opening the Sheet in Google; otherwise it is
+       the way to re-point Save at a different workbook. It previously said
+       "click to..." with nothing listening. */
+    if (sheetsOn()) tgt.dataset.act = 'opensheet';
+    else if (FSA) tgt.dataset.act = 'relink';
+    else delete tgt.dataset.act;
+
     tgt.title = sheetsOn()
       ? 'Save writes to the shared Google Sheet, so every coach sees it.' +
+        '\nClick to open ' + sheetDocLabel() + ' in Google Sheets.' +
         (linked ? '\nThe workbook ' + fileHandleName + ' is still linked under Save.' : '')
       : (linked
         ? 'Save writes straight into this file. Click to point it somewhere else.'
@@ -3491,7 +3513,48 @@ async function sheetsCall(action, body) {
   if (data && data.badToken) {
     throw new Error('The token does not match SECRET in the script.');
   }
+  noteSheetDoc(data);
   return data;
+}
+
+/* The bridge lives inside the Sheet, so it knows where the Sheet is. Every
+   reply carries that address, and it is remembered here — which is what lets
+   the tracker offer to open the Sheet without anyone pasting a second link. */
+function noteSheetDoc(data) {
+  if (!data || !data.sheetUrl) return;
+  if (S.sheetDocUrl === data.sheetUrl && S.sheetDocName === (data.sheetName || '')) return;
+  S.sheetDocUrl = data.sheetUrl;
+  S.sheetDocName = data.sheetName || '';
+  persist();
+}
+
+/** Only ever a Google Sheets address, and only ever https. */
+function validSheetDocUrl(u) {
+  return /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[A-Za-z0-9_-]+/.test(String(u || '').trim());
+}
+
+function sheetDocLabel() {
+  return S.sheetDocName || 'the Google Sheet';
+}
+
+/** Opens the Sheet itself in a browser tab. */
+function openSheetDoc() {
+  closeMenus();
+  if (!S.sheetDocUrl) {
+    return openModal({
+      title: 'The Sheet’s address is not known yet',
+      intro: 'The tracker learns where the Sheet is from the bridge script, and this one has not told it yet.',
+      body: '<div class="warnbox">Press <strong>Test connection</strong> in Settings. If that still does not ' +
+            'find it, the script in your Sheet is an older copy — paste in the current ' +
+            '<strong>Google Sheets Bridge.gs</strong> and re-deploy it as a <strong>New version</strong>.</div>' +
+            '<p class="muted">Or just paste the Sheet’s own address into Settings by hand — open the ' +
+            'Sheet in Google, copy the address bar, and put it in the "Sheet address" box.</p>',
+      foot: '<button class="btn" data-act="closemodal">Close</button>' +
+            '<button class="btn primary" data-act="settings">Open settings</button>'
+    });
+  }
+  window.open(S.sheetDocUrl, '_blank', 'noopener,noreferrer');
+  toast('Opening ' + sheetDocLabel() + ' in Google Sheets', 3500);
 }
 
 /** The workbook, as tab-and-rows the script can drop straight into the Sheet. */
@@ -4183,10 +4246,15 @@ function openSettings() {
           '<input id="setSheetsPoll" type="number" min="10" max="300" step="5" value="' +
           esc(String(S.sheetsPoll || 20)) + '"></div>' +
       '</div>' +
+      '<div class="field" style="margin-top:8px"><label for="setSheetDocUrl">Sheet address ' +
+        '<span class="muted">(found automatically; paste it if you would rather)</span></label>' +
+        '<input id="setSheetDocUrl" placeholder="https://docs.google.com/spreadsheets/d/…" value="' +
+        esc(S.sheetDocUrl) + '" spellcheck="false"></div>' +
       '<div class="frow" style="margin-top:8px">' +
         '<button class="btn" data-act="testsheets">Test connection</button>' +
         '<button class="btn" data-act="sheetspull">Load from Sheet</button>' +
         '<button class="btn" data-act="pushsheets">Save to Sheet</button>' +
+        (S.sheetDocUrl ? '<button class="btn" data-act="opensheet">Open in Google Sheets ↗</button>' : '') +
         '<button class="btn" data-act="sheetshelp">Setup steps</button></div>' +
       (S.sheetsRev
         ? '<p class="muted" style="margin:8px 0 0">Working from version <strong>' + esc(String(S.sheetsRev)) +
@@ -4255,6 +4323,14 @@ function saveSettings() {
   const poll = $('#setSheetsPoll')
     ? Math.min(300, Math.max(10, Number($('#setSheetsPoll').value) || 20))
     : S.sheetsPoll;
+  let docUrl = S.sheetDocUrl;
+  let docBad = false;
+  if ($('#setSheetDocUrl')) {
+    const typed = $('#setSheetDocUrl').value.trim();
+    if (!typed) docUrl = '';
+    else if (validSheetDocUrl(typed)) docUrl = typed;
+    else docBad = true;      // keep what we had rather than store a broken link
+  }
   const wasOn = sheetsOn();
   commit('settings', () => {
     S.seasonLabel = label;
@@ -4269,10 +4345,18 @@ function saveSettings() {
     S.sheetsAuto = auto;
     S.sheetsMode = mode;
     S.sheetsPoll = poll;
+    if (docUrl !== S.sheetDocUrl) {
+      S.sheetDocUrl = docUrl;
+      if (!docUrl) S.sheetDocName = '';
+    }
   });
   closeModal();
   renderAll();
   startSheetsWatch();
+  if (docBad) {
+    toast('That is not a Google Sheets address, so it was not saved — it should start ' +
+          'https://docs.google.com/spreadsheets/', 8000);
+  }
   // Turning sharing on is the moment to find out whether the Sheet already has
   // a roster in it -- taking someone else's is far more often right than
   // overwriting it with whatever happens to be on this laptop.
@@ -4573,7 +4657,12 @@ function buildSaveMenu(menu) {
           (S.sheetsPushedAt ? ' — last saved ' + esc(stamp(S.sheetsPushedAt)) : '') + '</span></button>' +
         '<button data-act="sheetspull">Load from the Google Sheet<span class="mi-sub">' +
           'Brings in what the other coaches have saved</span></button>' +
+        '<button data-act="opensheet">Open in Google Sheets ↗<span class="mi-sub">' +
+          esc(sheetDocLabel()) + ' — opens in a browser tab</span></button>' +
         '<div class="sep"></div>'
+      : S.sheetDocUrl
+      ? '<button data-act="opensheet">Open in Google Sheets ↗<span class="mi-sub">' +
+          esc(sheetDocLabel()) + '</span></button><div class="sep"></div>'
       : '') +
     '<button data-act="expxlsx">' + (inPlace ? 'Save to ' + esc(fileHandleName) : 'Save workbook (.xlsx)') +
       '<span class="mi-sub">' + (inPlace
@@ -4719,6 +4808,7 @@ document.addEventListener('click', e => {
     case 'mergesheetspull': closeModal(); pullFromSheets({ merge: true }); break;
     case 'sheetscheck': closeMenus(); sheetsChipClicked(); break;
     case 'install': doInstall(); break;
+    case 'opensheet': openSheetDoc(); break;
     case 'expxlsx':  closeMenus(); exportWorkbook(); break;
     case 'expjson':  closeMenus(); backupJSON(); break;
     case 'expcsv':   closeMenus(); exportCSV(); break;
@@ -5149,6 +5239,7 @@ window.AHS = {
   activeDay: () => activeDay, applyImport: applyImport, newSeason: newSeason, switchSeason: switchSeason, redo: redo,
   linkedFile: () => fileHandleName,
   installState: installState, applyAddbar: applyAddbar, toggleAddbar: toggleAddbar,
+  openSheetDoc: openSheetDoc, validSheetDocUrl: validSheetDocUrl,
   _setHandle: h => { fileHandle = h; fileHandleName = h ? h.name : ''; }
 };
 })();
