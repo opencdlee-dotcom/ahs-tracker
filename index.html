@@ -123,10 +123,14 @@ button{cursor:pointer;background:none;border:none;padding:0}
   border-radius:var(--radius);box-shadow:var(--shadow);
 }
 .menu[hidden]{display:none}
+/* Label above its explanation, not beside it. Laid out as a row, the two
+   competed for the same 230px and both wrapped into narrow ragged columns —
+   which is also what "margin-top" on .mi-sub had always assumed. */
 .menu button, .menu .mi{
-  display:flex;width:100%;align-items:baseline;gap:8px;
+  display:flex;flex-direction:column;width:100%;align-items:flex-start;gap:0;
   padding:8px 10px;border-radius:7px;text-align:left;font-size:14px;
 }
+.menu button > .mi-sub{max-width:100%}
 .menu button:hover{background:var(--surface-2)}
 .menu .mi-sub{display:block;font-size:12px;color:var(--faint);margin-top:2px}
 .menu .sep{height:1px;background:var(--border);margin:5px 2px}
@@ -849,10 +853,13 @@ th.filtered .th-lbl{color:var(--accent)}
       <span class="btn-tx">Refresh</span>
     </button>
 
-    <button class="btn" id="openBtn">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-      <span class="btn-tx">Open</span>
-    </button>
+    <div class="menu-wrap">
+      <button class="btn" id="openBtn" title="Open a spreadsheet, or the Google Sheet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+        <span class="btn-tx">Open</span>
+      </button>
+      <div class="menu" id="openMenu" hidden></div>
+    </div>
 
     <div class="menu-wrap">
       <button class="btn primary" id="saveBtn" aria-haspopup="true" aria-expanded="false">
@@ -1435,17 +1442,16 @@ function renderSaveChip() {
     tgtName.textContent = saveTargetLabel();
     tgt.className = 'chip target' + (linked || sheetsOn() ? ' linked' : '');
 
-    /* The chip names where Save goes, so clicking it should take you there.
-       In Sheets mode that means opening the Sheet in Google; otherwise it is
-       the way to re-point Save at a different workbook. It previously said
-       "click to..." with nothing listening. */
-    if (sheetsOn()) tgt.dataset.act = 'opensheet';
-    else if (FSA) tgt.dataset.act = 'relink';
+    /* Getting to the Sheet lives under Open, in one place. This chip only says
+       where Save goes — and in file mode it is still the way to re-point Save,
+       which is what its "click to..." wording had always promised without
+       anything actually listening. */
+    if (!sheetsOn() && FSA) tgt.dataset.act = 'relink';
     else delete tgt.dataset.act;
 
     tgt.title = sheetsOn()
       ? 'Save writes to the shared Google Sheet, so every coach sees it.' +
-        '\nClick to open ' + sheetDocLabel() + ' in Google Sheets.' +
+        '\nOpen ▸ Open the Google Sheet takes you to it.' +
         (linked ? '\nThe workbook ' + fileHandleName + ' is still linked under Save.' : '')
       : (linked
         ? 'Save writes straight into this file. Click to point it somewhere else.'
@@ -4254,7 +4260,6 @@ function openSettings() {
         '<button class="btn" data-act="testsheets">Test connection</button>' +
         '<button class="btn" data-act="sheetspull">Load from Sheet</button>' +
         '<button class="btn" data-act="pushsheets">Save to Sheet</button>' +
-        (S.sheetDocUrl ? '<button class="btn" data-act="opensheet">Open in Google Sheets ↗</button>' : '') +
         '<button class="btn" data-act="sheetshelp">Setup steps</button></div>' +
       (S.sheetsRev
         ? '<p class="muted" style="margin:8px 0 0">Working from version <strong>' + esc(String(S.sheetsRev)) +
@@ -4619,13 +4624,15 @@ function showDiagnostics(results) {
 }
 
 /* ================================================================= MENUS */
+/* Every drop-down in the top bar, found rather than listed: a hand-written
+   list silently leaves out whichever menu was added last, and that menu then
+   refuses to close when you click away from it. */
 function closeMenus(except) {
-  ['#seasonMenu', '#coachMenu', '#saveMenu', '#rowMenuPop'].forEach(id => {
-    const el = $(id);
-    if (el && id !== except) {
-      if (id === '#rowMenuPop') el.remove(); else el.hidden = true;
-    }
+  $$('.menu-wrap .menu').forEach(el => {
+    if (('#' + el.id) !== except) el.hidden = true;
   });
+  const pop = $('#rowMenuPop');           // floating, so it is built and destroyed
+  if (pop && except !== '#rowMenuPop') pop.remove();
   $$('.menu-wrap .btn[aria-expanded]').forEach(b => b.setAttribute('aria-expanded', 'false'));
 }
 function toggleMenu(btnSel, menuSel, build) {
@@ -4657,12 +4664,7 @@ function buildSaveMenu(menu) {
           (S.sheetsPushedAt ? ' — last saved ' + esc(stamp(S.sheetsPushedAt)) : '') + '</span></button>' +
         '<button data-act="sheetspull">Load from the Google Sheet<span class="mi-sub">' +
           'Brings in what the other coaches have saved</span></button>' +
-        '<button data-act="opensheet">Open in Google Sheets ↗<span class="mi-sub">' +
-          esc(sheetDocLabel()) + ' — opens in a browser tab</span></button>' +
         '<div class="sep"></div>'
-      : S.sheetDocUrl
-      ? '<button data-act="opensheet">Open in Google Sheets ↗<span class="mi-sub">' +
-          esc(sheetDocLabel()) + '</span></button><div class="sep"></div>'
       : '') +
     '<button data-act="expxlsx">' + (inPlace ? 'Save to ' + esc(fileHandleName) : 'Save workbook (.xlsx)') +
       '<span class="mi-sub">' + (inPlace
@@ -4809,6 +4811,7 @@ document.addEventListener('click', e => {
     case 'sheetscheck': closeMenus(); sheetsChipClicked(); break;
     case 'install': doInstall(); break;
     case 'opensheet': openSheetDoc(); break;
+    case 'openfile':  closeMenus(); openViaPicker(); break;
     case 'expxlsx':  closeMenus(); exportWorkbook(); break;
     case 'expjson':  closeMenus(); backupJSON(); break;
     case 'expcsv':   closeMenus(); exportCSV(); break;
@@ -4945,7 +4948,25 @@ $('#addBar').addEventListener('submit', e => {
 });
 
 /* open / import */
-$('#openBtn').addEventListener('click', openViaPicker);
+/* Open is where you go to reach a source of the roster. With no Google Sheet
+   set up there is only one, so the button stays exactly what it always was and
+   goes straight to the file picker — no menu, no extra click for anyone who
+   never touches Sheets. Once a Sheet exists there are two, and it offers both. */
+function knowsASheet() { return !!(S.sheetDocUrl || S.sheetsUrl); }
+
+function buildOpenMenu(menu) {
+  menu.innerHTML =
+    '<button data-act="openfile">Open a spreadsheet…' +
+      '<span class="mi-sub">An .xlsx, .csv or a backup .json on this device</span></button>' +
+    '<button data-act="opensheet">Open the Google Sheet ↗' +
+      '<span class="mi-sub">' + esc(sheetDocLabel()) + ' — opens in a browser tab</span></button>';
+}
+
+$('#openBtn').addEventListener('click', e => {
+  if (!knowsASheet()) return openViaPicker();
+  e.stopPropagation();
+  toggleMenu('#openBtn', '#openMenu', buildOpenMenu);
+});
 /* ------------------------------------------------------------ small screens
    On a phone the add-athlete row costs three of the first five rows on screen,
    before a single name is visible — so it starts folded away there and stays
