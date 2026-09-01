@@ -705,22 +705,29 @@ th.filtered .th-lbl{color:var(--accent)}
   .stats::-webkit-scrollbar{display:none}
   .stat{flex:none}
   .daybar{margin-left:0;width:100%}
-  table{min-width:0}
-  th.c-gr,td.c-gr,th.c-mn,td.c-mn,th.c-email,td.c-email,th.c-phone,td.c-phone{display:none}
+  /* The table keeps its natural width and the phone shows a slice of it,
+     which scrolls both ways with the athlete's name pinned. It used to hide
+     grade, email, phone, the row menu and every day but the active one — and
+     since the Columns panel still listed them as showing, there was no way
+     back to them at all. Narrowing the screen is not the coach's decision to
+     have made for them: what they want out of the way, they hide themselves
+     in Columns, and that choice is remembered. */
+  table{width:max-content;min-width:100%}
+  /* Every pixel of padding is multiplied by the number of columns, and the
+     two pinned columns spend it out of the screen the coach can actually see. */
+  thead th,tbody td{padding-left:8px;padding-right:8px}
+  th.c-id,td.c-id{min-width:32px;padding-right:6px}
   .lbl-lg{display:none}
   .lbl-sm{display:inline}
   .ret-tx{display:none}
   .pill.ret-yes{padding:0 7px}
-  th.d.off,td.d.off{display:none}      /* only the active day shows */
-  th.c-name,td.c-name{width:auto;min-width:0}
+  th.c-name,td.c-name{width:auto;min-width:132px}
   th.c-fill,td.c-fill{display:none}
   th.c-cl,td.c-cl{width:96px}
   th.d,td.d{width:58px}
   .drawer{width:100vw;border-left:none}
 }
 @media (max-width:420px){
-  th.c-id,td.c-id{display:none}
-  th.c-name,td.c-name{left:0}
   .season-name{max-width:44vw}
   /* Every row of chrome is a row of athletes nobody can see. Refresh and Open
      keep their icons and lose their words; Save keeps both, being the one
