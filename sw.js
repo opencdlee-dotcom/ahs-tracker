@@ -13,7 +13,7 @@
  *
  * CACHE is stamped at build time, so a new build cannot be served the old file.
  */
-const CACHE = 'ahs-tryouts-20260902-065833';
+const CACHE = 'ahs-tryouts-20260902-081812';
 const SHELL = [
   './',
   './index.html',

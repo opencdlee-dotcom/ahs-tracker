@@ -592,11 +592,20 @@ th.c-cc,td.c-cc{width:120px;max-width:170px}
 .rtag.tone-bad{background:var(--bad-bg);color:var(--bad)}
 .rtag.tone-info{background:var(--info-bg);color:var(--info)}
 .rtag.tone-accent{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
-.celltext{
-  display:block;width:100%;text-align:left;font-size:13px;color:var(--dim);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 0;
+/* A free-text column is typed into in place. It has to read as a cell until
+   you touch it — 85 rows of visible form fields would shout over the roster
+   and bury the attendance marks that are the point of the screen. */
+.celledit{
+  width:100%;height:32px;padding:0 7px;
+  border:1px solid transparent;border-radius:6px;background:transparent;
+  font-size:14px;color:var(--text);
 }
-.celltext:hover{color:var(--accent)}
+.celledit::placeholder{color:var(--faint)}
+.celledit:hover{border-color:var(--border);background:var(--surface)}
+.celledit:focus{
+  outline:none;border-color:var(--accent);background:var(--surface);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 18%,transparent);
+}
 .ccgrid{display:flex;flex-wrap:wrap;gap:10px}
 .ccgrid .field{flex:1 1 46%;min-width:150px}
 .btn.linkish{
@@ -814,6 +823,9 @@ th.filtered .th-lbl{color:var(--accent)}
   .ptab-mn{width:28px;height:28px;font-size:13px;color:var(--dim);margin-right:-6px}
   .ptab-mn:hover{background:none;color:var(--dim)}
   .coltab{height:36px}
+  /* No font-size here: the 16px rule below is what stops iOS zooming the
+     page when a cell is tapped, and a class selector would outrank it. */
+  .celledit{height:40px}
   .fchip,.chip,.btn{touch-action:manipulation}
   button,summary,label{touch-action:manipulation}
   /* Hover-only backgrounds just flash and stick under a finger. */
@@ -827,7 +839,7 @@ th.filtered .th-lbl{color:var(--accent)}
 .addtoggle.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 @media (max-width:720px){
   /* iOS zooms the whole page in when a focused field is under 16px. */
-  input,select,textarea{font-size:16px}
+  input,select,textarea,.celledit{font-size:16px}
   .addbar input{font-size:16px}
   /* The roster is the page. Everything else earns its space or folds away. */
   #app.addhidden .addbar{display:none}
@@ -867,6 +879,8 @@ th.filtered .th-lbl{color:var(--accent)}
   th.filtered .th-lbl,thead th .th-lbl{color:#000 !important}
   tbody td.c-id,tbody td.c-gr{color:#000 !important}
   .att{border:1px solid #999 !important;background:#fff !important;color:#000 !important;height:24px}
+  /* An input prints as a boxed field otherwise, which on paper is just noise. */
+  .celledit{border:none !important;background:transparent !important;padding:0 !important;color:#000 !important;height:auto}
   .pill{border:1px solid #999 !important;background:#fff !important;color:#000 !important}
   .print-head{display:block !important;margin:0 0 10px;padding-bottom:6px;border-bottom:2px solid #000}
   .print-head h1{margin:0;font-size:16px}
@@ -1688,7 +1702,12 @@ function sortValue(p, key) {
     const c = customCol(key.slice(3));
     const v = customValue(p, key.slice(3));
     if (!v) return null;                                             // unset sinks
-    if (!c || c.type === 'text') return norm(v);
+    if (!c || c.type === 'text') {
+      // Bus 10 must not sort before bus 9. A free-text column holding numbers
+      // sorts as numbers, exactly the way Grade already does.
+      const s = String(v).trim(), n = Number(s);
+      return (s !== '' && !isNaN(n)) ? n : norm(s);
+    }
     const at = (c.options || []).findIndex(o => o.value === v);
     return at < 0 ? 999 : at;                    // list order, not alphabetical
   }
@@ -1956,9 +1975,15 @@ function customValue(p, id) { return (p.custom && p.custom[id] != null) ? p.cust
 function customCellHTML(p, c) {
   const v = customValue(p, c.id);
   if (c.type === 'text') {
-    return v
-      ? '<button class="celltext" data-act="open" data-p="' + p.id + '" title="' + esc(v) + '">' + esc(v) + '</button>'
-      : '<span class="cell-muted">—</span>';
+    /* Typed straight into the grid. It used to be a button when it held a
+       value and a bare "—" when it did not — so an empty free-text column had
+       nothing to click at all, and the only way to fill one was to open all 85
+       athletes in turn. A choice column can be filled by tapping down it;
+       this is the same thing for text. Enter and the arrow keys step down the
+       column, so a bus list is one pass with two hands on the keyboard. */
+    return '<input class="celledit" type="text" data-cell-cc="' + c.id + '" data-p="' + p.id +
+      '" value="' + esc(v) + '" placeholder="—" spellcheck="false" autocomplete="off"' +
+      ' aria-label="' + esc(c.label) + ' for ' + esc(p.name) + '">';
   }
   if (!v) {
     return '<button class="pill pill-empty" data-act="cyclecustom" data-p="' + p.id + '" data-c="' + c.id +
@@ -2004,6 +2029,36 @@ function setCustom(p, c, value) {
     if (value) p.custom[c.id] = value; else delete p.custom[c.id];
   });
   renderTable(); renderFilters();
+}
+
+/* The same write, without redrawing the table. A grid cell that is being typed
+   into IS part of the table, so the usual renderTable() would tear the input
+   out from under the cursor and drop what was half-entered. */
+function setCustomQuiet(p, c, value) {
+  if (customValue(p, c.id) === value) return;
+  commit(c.label, () => {
+    p.custom = p.custom || {};
+    if (value) p.custom[c.id] = value; else delete p.custom[c.id];
+  });
+}
+
+/* Writes what is in a grid cell back to the athlete. Enter calls this
+   directly rather than leaning on blur to raise a change event: blur only
+   raises one for a value the USER typed, so an Enter that had to travel
+   through blur would be one indirection away from silently saving nothing.
+   Calling it twice is harmless — setCustomQuiet ignores an unchanged value. */
+function commitCellEdit(el) {
+  const pl = byId(Number(el.dataset.p)), c = customCol(el.dataset.cellCc);
+  if (!pl || !c) return;
+  setCustomQuiet(pl, c, el.value.trim());
+  if (openPlayerId === pl.id) renderDrawer();
+}
+
+/** The same column, one row down (or up) — for filling a column in one pass. */
+function nextCellEdit(el, dir) {
+  const all = $$('#tbody .celledit[data-cell-cc="' + el.dataset.cellCc + '"]');
+  const i = all.indexOf(el);
+  return (i >= 0 && all[i + dir]) ? all[i + dir] : null;
 }
 
 /** Splits "yes/no/maybe" or "yes, no, maybe" into option rows. */
@@ -5635,6 +5690,28 @@ $('#scrim').addEventListener('click', () => { if (!$('#modal').hidden) closeModa
 document.addEventListener('keydown', e => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
 
+  /* Filling a free-text column down the roster. Enter and the arrows step to
+     the same column one row on — a single-line input has no use for Up and
+     Down otherwise. Escape puts back what was there and gives up the cell. */
+  if (e.target.classList && e.target.classList.contains('celledit') &&
+      !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key === 'Enter' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = nextCellEdit(e.target, e.key === 'ArrowUp' ? -1 : 1);
+      commitCellEdit(e.target);
+      e.target.blur();
+      if (next) { next.focus(); next.select(); }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      const pl = byId(Number(e.target.dataset.p)), c = customCol(e.target.dataset.cellCc);
+      e.target.value = (pl && c) ? customValue(pl, c.id) : '';
+      e.target.blur();
+      return;
+    }
+  }
+
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) { e.preventDefault(); return runDiagnostics(); }
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey && !typing) { e.preventDefault(); return undo(); }
   if ((e.ctrlKey || e.metaKey) && ((e.key === 'y' || e.key === 'Y') || ((e.key === 'z' || e.key === 'Z') && e.shiftKey)) && !typing) { e.preventDefault(); return redo(); }
@@ -5670,6 +5747,10 @@ document.addEventListener('change', e => {
     if (w) w.hidden = (e.target.value === 'text');
     return;
   }
+  // A free-text cell in the roster itself. Saves on leaving the cell, so one
+  // edited cell is one undo step rather than one per keystroke.
+  if (e.target.dataset && e.target.dataset.cellCc) { commitCellEdit(e.target); return; }
+
   // A dropdown or text box on the player page writes straight through.
   if (e.target.dataset && e.target.dataset.cc) {
     const pl = byId(openPlayerId), c = customCol(e.target.dataset.cc);
