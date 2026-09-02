@@ -52,7 +52,12 @@
   }
 }
 *{box-sizing:border-box}
+/* dvh tracks the viewport as a phone's toolbar slides away and as the device
+   is turned; plain 100% is measured against a height that can be stale after a
+   rotation, which leaves the last row of the roster under the browser chrome
+   with no way to scroll to it. 100% stays as the fallback. */
 html,body{height:100%}
+@supports (height:100dvh){ html,body{height:100dvh} }
 body{
   margin:0;
   background:var(--bg);
@@ -122,6 +127,16 @@ button{cursor:pointer;background:none;border:none;padding:0}
 .btn svg{width:16px;height:16px;flex:none}
 
 .menu-wrap{position:relative}
+/* Save is a split button: pressing it SAVES, to the place named on its face.
+   It used to open a menu, which meant the answer to "where does this go?" was
+   a list you had to read and choose from every single time. */
+.menu-wrap.split{display:inline-flex;align-items:center}
+.menu-wrap.split #saveBtn{border-top-right-radius:0;border-bottom-right-radius:0}
+.menu-wrap.split .caret{
+  border-top-left-radius:0;border-bottom-left-radius:0;
+  border-left:1px solid color-mix(in srgb,var(--accent-ink) 35%,transparent);
+  padding:0 8px;font-size:11px;
+}
 .menu{
   position:absolute;top:calc(100% + 6px);right:0;z-index:60;
   min-width:230px;padding:6px;
@@ -253,8 +268,18 @@ button{cursor:pointer;background:none;border:none;padding:0}
 }
 
 /* ---------- table ---------- */
-.tablewrap{flex:1 1 0;min-height:0;overflow:auto;background:var(--bg);position:relative}
-table{border-collapse:separate;border-spacing:0;width:100%;min-width:640px}
+.tablewrap{
+  flex:1 1 0;min-height:0;overflow:auto;background:var(--bg);position:relative;
+  -webkit-overflow-scrolling:touch;      /* momentum scrolling on iOS, both axes */
+}
+/* ONE behaviour on every device. The table takes its natural width and the
+   screen shows a slice of it, scrolling both ways with the athlete's name
+   pinned. This used to be "width:100%;min-width:640px" above 720px and
+   "max-content" below — so a tablet held upright squeezed fifteen columns into
+   820px with nothing to scroll to, and turning it changed the SHAPE of the
+   roster instead of simply showing more of it. Two layouts is two sets of
+   bugs; a phone is now the same screen as a desktop, just less of it. */
+table{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
 thead th{
   position:sticky;top:0;z-index:20;
   background:var(--surface-2);
@@ -779,14 +804,13 @@ th.filtered .th-lbl{color:var(--accent)}
   .stats::-webkit-scrollbar{display:none}
   .stat{flex:none}
   .daybar{margin-left:0;width:100%}
-  /* The table keeps its natural width and the phone shows a slice of it,
-     which scrolls both ways with the athlete's name pinned. It used to hide
-     grade, email, phone, the row menu and every day but the active one — and
-     since the Columns panel still listed them as showing, there was no way
+  /* The table sizing itself is global now — see the rule near .tablewrap.
+     What stays here is only what a small screen genuinely needs. It used to
+     HIDE grade, email, phone, the row menu and every day but the active one,
+     while the Columns panel still listed them as showing, so there was no way
      back to them at all. Narrowing the screen is not the coach's decision to
-     have made for them: what they want out of the way, they hide themselves
-     in Columns, and that choice is remembered. */
-  table{width:max-content;min-width:100%}
+     have made for them: what they want out of the way they hide themselves in
+     Columns, and that choice is remembered. */
   /* Every pixel of padding is multiplied by the number of columns, and the
      two pinned columns spend it out of the screen the coach can actually see. */
   thead th,tbody td{padding-left:8px;padding-right:8px}
@@ -953,11 +977,12 @@ th.filtered .th-lbl{color:var(--accent)}
       <div class="menu" id="openMenu" hidden></div>
     </div>
 
-    <div class="menu-wrap">
-      <button class="btn primary" id="saveBtn" aria-haspopup="true" aria-expanded="false">
+    <div class="menu-wrap split">
+      <button class="btn primary" id="saveBtn" title="Save back to where this roster came from">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
-        Save
+        <span id="saveBtnLabel">Save</span>
       </button>
+      <button class="btn primary caret" id="saveMore" aria-haspopup="true" aria-expanded="false" title="Save somewhere else" aria-label="Save somewhere else">▾</button>
       <div class="menu" id="saveMenu" hidden></div>
     </div>
 
@@ -1188,6 +1213,7 @@ function blankSeason(id, label, source) {
        back where you were in THAT one. The search box is deliberately not
        here: text left in it on a later day reads as a roster gone missing. */
     ui: { day: '', filter: 'all', tab: 'all' },
+    origin: '',            // 'sheet' | 'file' — where Save writes back to
     layout: null,
     customCols: [],
     tabs: [],              // the coach's column panels — see COLUMN TABS below
@@ -1248,6 +1274,7 @@ function migrate(s) {
   s.ui.filter = FILTER_LABELS[s.ui.filter] ? s.ui.filter : 'all';
   s.ui.tab = s.ui.tab || 'all';
   s.layout = s.layout || null;
+  s.origin = (s.origin === 'sheet' || s.origin === 'file') ? s.origin : '';
   s.view = (s.view && typeof s.view === 'object') ? s.view : { order: [], hidden: {} };
   s.view.order = Array.isArray(s.view.order) ? s.view.order : [];
   s.view.hidden = (s.view.hidden && typeof s.view.hidden === 'object') ? s.view.hidden : {};
@@ -1301,6 +1328,7 @@ function commit(label, mutate) {
   S.changesSinceExport = (S.changesSinceExport || 0) + 1;
   persist();
   renderSaveChip();
+  renderSaveButton();
 }
 function undo() {
   if (!undoStack.length) return toast('Nothing to undo');
@@ -1508,6 +1536,7 @@ function renderAll() {
   renderTable();
   renderViewButton();
   renderSaveChip();
+  renderSaveButton();
   renderSyncChip();
 }
 function crestText(label) {
@@ -1519,12 +1548,64 @@ function crestText(label) {
 
 function active() { return S.players.filter(p => !p.archived); }
 
+/* ------------------------------------------------------------ where Save goes
+   Save writes back to whatever this roster was LOADED from. That is a fact
+   about this season, so it is recorded when a load succeeds rather than
+   inferred later from whatever happens to be configured: a staff sharing a
+   Google Sheet usually also has a stray .xlsx on someone's laptop, and
+   inferring picked whichever came first in the list. One resolver answers the
+   question, and the button, the chip and Ctrl+S all read it — so they cannot
+   contradict each other about where the work is about to go. */
+function saveDestination() {
+  if (S.origin === 'sheet' && sheetsOn()) return 'sheet';
+  if (S.origin === 'file' && fileHandle) return 'file';
+  // No recorded origin, or the recorded one is out of reach on this device (a
+  // phone holds no file handle): fall back to whatever can actually be written.
+  if (sheetsOn()) return 'sheet';
+  if (fileHandle) return 'file';
+  return FSA ? 'pick' : 'download';
+}
+
 /** Names the exact destination, so nobody has to guess where Save goes. */
 function saveTargetLabel() {
-  if (sheetsOn()) return 'Google Sheet (shared)';
-  if (fileHandleName) return fileHandleName;
-  if (!FSA) return 'Downloads folder';
-  return S.sourceFileName || 'not linked yet';
+  switch (saveDestination()) {
+    // Name the Sheet AND say it is a Sheet: its own title on its own reads like
+    // a filename, which is the very confusion this label exists to end.
+    case 'sheet': return S.sheetDocName ? S.sheetDocName + ' · Google Sheet' : 'Google Sheet (shared)';
+    case 'file':  return fileHandleName;
+    case 'pick':  return S.sourceFileName || 'not linked yet';
+    default:      return 'Downloads folder';
+  }
+}
+
+/** The same answer, short enough to sit on a button in the top bar. */
+function saveButtonLabel() {
+  switch (saveDestination()) {
+    case 'sheet': return 'Save to Sheet';
+    case 'file':  return 'Save to ' + trimName(fileHandleName);
+    case 'pick':  return 'Save workbook';
+    default:      return 'Save a copy';
+  }
+}
+/* The button says where it is about to write. It and the chip beside it both
+   read saveDestination(), so they cannot disagree with each other, or with what
+   pressing the button actually does. */
+function renderSaveButton() {
+  const lbl = $('#saveBtnLabel'), btn = $('#saveBtn');
+  if (!lbl || !btn) return;
+  lbl.textContent = saveButtonLabel();
+  btn.title = 'Save back to ' + saveTargetLabel() +
+    (S.origin ? ' — where this roster was loaded from' : '');
+}
+
+function trimName(n) {
+  n = String(n || '').replace(/\.xlsx?$/i, '');
+  return n.length > 16 ? n.slice(0, 15) + '…' : n;
+}
+
+/** What Save actually does: write back to the source. */
+function saveToOrigin() {
+  return saveDestination() === 'sheet' ? pushToSheets() : exportWorkbook();
 }
 
 /** Keeps the toolbar honest about whether anything is being filtered out. */
@@ -1546,6 +1627,10 @@ function renderSaveChip() {
   if (tgt) {
     const linked = !!fileHandleName;
     tgtName.textContent = saveTargetLabel();
+    // The chip is narrow and its text gets clipped, so the whole answer lives
+    // in the tooltip rather than only in the half that happens to fit.
+    tgt.title = 'Save writes to ' + saveTargetLabel() +
+      (S.origin ? ' — where this roster was loaded from' : '');
     tgt.className = 'chip target' + (linked || sheetsOn() ? ' linked' : '');
 
     /* Getting to the Sheet lives under Open, in one place. This chip only says
@@ -1909,11 +1994,47 @@ function renderTable() {
 /* The Student column is sticky-pinned against the right edge of the # column,
    so its offset has to track whatever width # actually ended up taking —
    three-digit IDs on a big roster make that column wider than two-digit ones.
-   Measuring after render keeps # self-sizing without breaking the pin. */
+   Measuring after render keeps # self-sizing without breaking the pin.
+
+   Measuring on RESIZE is not enough, and that is worth spelling out. Turning a
+   phone on its side crosses the 720px breakpoint, which widens the # column by
+   4px of padding; a resize handler reads the rectangle before that new layout
+   exists and writes the old width, so the pinned column overlapped its
+   neighbour by exactly 4px until something else forced a re-render. Measured
+   2026-09-02: --idw=60.61 against a real width of 64.61.
+
+   So the cell is OBSERVED rather than sampled at moments we guessed were the
+   right ones. A ResizeObserver fires when the width actually changes, whatever
+   caused it — a breakpoint, a font arriving late, an ID gaining a digit. */
+let idwObserver = null;
+
+function writeIdw(el) {
+  if (!el) return;
+  const w = el.getBoundingClientRect().width;
+  const now = parseFloat(document.documentElement.style.getPropertyValue('--idw'));
+  if (Math.abs((now || 0) - w) < 0.5) return;      // no write, so no feedback loop
+  document.documentElement.style.setProperty('--idw', w + 'px');
+}
+
 function syncStickyOffset() {
   const idTh = $('#thead th.c-id');
-  const w = idTh ? idTh.getBoundingClientRect().width : 0;
-  document.documentElement.style.setProperty('--idw', w + 'px');
+  // The # column can be hidden, and Student then pins flush to the left edge.
+  // Bailing out here would leave the LAST measured width in place, which shoved
+  // Student 64px off the screen the moment # was hidden.
+  if (!idTh) {
+    document.documentElement.style.setProperty('--idw', '0px');
+    if (idwObserver) idwObserver.disconnect();
+    return;
+  }
+  writeIdw(idTh);
+  // The header is rebuilt on every render, so the observer follows the new cell.
+  if (!window.ResizeObserver) return;
+  if (!idwObserver) idwObserver = new ResizeObserver(() => writeIdw($('#thead th.c-id')));
+  idwObserver.disconnect();
+  // BORDER box, not the default content box. Crossing 720px changes this cell's
+  // PADDING and nothing else, so its content box never moves and a default
+  // observer sits silent through exactly the case it was added for.
+  idwObserver.observe(idTh, { box: 'border-box' });
 }
 
 function clHTML(p) {
@@ -3364,6 +3485,7 @@ function applyImport(res, mode) {
     if (res.ratingFields && res.ratingFields.length) S.ratingFields = res.ratingFields;
     if (res.layout) S.layout = res.layout;
     adoptColumns(res);
+    S.origin = 'file';                 // a workbook went in, so a workbook comes out
     S.days = res.days;
     S.players = res.players;
     activeDay = S.days.length ? S.days[0].id : null;
@@ -3409,6 +3531,9 @@ function applyImport(res, mode) {
     }
   });
   if (!S.days.some(d => d.id === activeDay)) activeDay = S.days.length ? S.days[0].id : null;
+  // Loaded from a workbook file. A Sheet load routes its merge through here
+  // and re-stamps origin as 'sheet' immediately afterwards.
+  S.origin = 'file';
   snapshotMaybe(true);
   renderAll();
 }
@@ -3786,6 +3911,7 @@ function markExported(where) {
   if (where) S.exportedTo = where;
   persist();
   renderSaveChip();
+  renderSaveButton();
 }
 
 /** Save the workbook. Writes in place when a file is linked; otherwise asks
@@ -4123,6 +4249,8 @@ function applySheetsPayload(data, mode) {
     S.exportedTo = 'Google Sheet';
   }
 
+  // This roster came out of the Sheet, so that is where Save puts it back.
+  S.origin = 'sheet';
   S.sheetsRev = String(data.rev == null ? '' : data.rev);
   S.sheetsPulledAt = new Date().toISOString();
   S.sheetsBy = data.updatedBy || '';
@@ -4171,6 +4299,7 @@ async function pullFromSheets(opts) {
 
   const moved = applySheetsPayload(data, opts.merge ? 'merge' : 'replace');
   renderSaveChip();
+  renderSaveButton();
   renderSyncChip();
 
   if (opts.merge) {
@@ -4227,6 +4356,7 @@ async function pushToSheets(opts) {
   }
   persist();
   renderSaveChip();
+  renderSaveButton();
   renderSyncChip();
   if (!opts.quiet) {
     toast('Google Sheet updated - ' +
@@ -5593,7 +5723,8 @@ document.addEventListener('drop', e => {
 /* menu buttons */
 $('#seasonBtn').addEventListener('click', e => { e.stopPropagation(); toggleMenu('#seasonBtn', '#seasonMenu', buildSeasonMenu); });
 $('#coachBtn').addEventListener('click', e => { e.stopPropagation(); toggleMenu('#coachBtn', '#coachMenu', buildCoachMenu); });
-$('#saveBtn').addEventListener('click', e => { e.stopPropagation(); toggleMenu('#saveBtn', '#saveMenu', buildSaveMenu); });
+$('#saveBtn').addEventListener('click', e => { e.stopPropagation(); closeMenus(); saveToOrigin(); });
+$('#saveMore').addEventListener('click', e => { e.stopPropagation(); toggleMenu('#saveMore', '#saveMenu', buildSaveMenu); });
 $('#settingsBtn').addEventListener('click', e => { e.stopPropagation(); closeMenus(); openSettings(); });
 
 /* add player — a real <form> so Enter in any field submits it */
@@ -5662,7 +5793,30 @@ function toggleAddbar() {
   if (shut) { const n = $('#addName'); if (n) n.focus(); }
 }
 $('#addToggle').addEventListener('click', toggleAddbar);
-window.addEventListener('resize', applyAddbar);
+
+/* Turning a tablet changes every width on screen, and the Student column is
+   pinned against a MEASURED offset (--idw, whatever the # column ended up
+   taking). Nothing re-measured it after a rotation, so the pinned column drifted
+   off its own header — the same fault as the header that once stopped sticking.
+   Rotation raises resize everywhere; orientationchange does not fire on a
+   desktop and on iOS fires before the new size can be read. Both are wired, and
+   both land in one debounced pass. */
+let relayoutTimer = null;
+function relayout() {
+  clearTimeout(relayoutTimer);
+  relayoutTimer = setTimeout(() => {
+    applyAddbar();
+    syncStickyOffset();
+    // And again on the next frame: the first read can land before the new
+    // breakpoint has been laid out. Measured 2026-09-02 crossing 720px — the
+    // pinned column overlapped its neighbour by exactly 4px of padding until
+    // something forced a second pass. rAF alone is not enough either, since a
+    // backgrounded page throttles it, so both run and the write is idempotent.
+    requestAnimationFrame(syncStickyOffset);
+  }, 60);
+}
+window.addEventListener('resize', relayout);
+window.addEventListener('orientationchange', relayout);
 applyAddbar();
 
 /* Refresh means "bring in what the source has", and in Sheets mode the source
@@ -5737,7 +5891,7 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R') && !e.shiftKey) { e.preventDefault(); return refreshSource(); }
   if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();
-    return sheetsOn() ? pushToSheets() : exportWorkbook();
+    return saveToOrigin();
   }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && e.target.id === 'evalText') { e.preventDefault(); return saveEval(); }
 
@@ -5989,6 +6143,7 @@ window.AHS = {
   installState: installState, applyAddbar: applyAddbar, toggleAddbar: toggleAddbar,
   openSheetDoc: openSheetDoc, validSheetDocUrl: validSheetDocUrl, _noteSheetDoc: noteSheetDoc,
   _sheetsToWorkbook: sheetsToWorkbook,
+  saveDestination: saveDestination, _relayout: relayout,
   _setHandle: h => { fileHandle = h; fileHandleName = h ? h.name : ''; }
 };
 })();
