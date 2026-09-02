@@ -1275,6 +1275,11 @@ function migrate(s) {
   s.ui.tab = s.ui.tab || 'all';
   s.layout = s.layout || null;
   s.origin = (s.origin === 'sheet' || s.origin === 'file') ? s.origin : '';
+  // A season saved before this field existed still knows where it came from:
+  // it has been pulled from the Sheet, or it named the workbook it was read out
+  // of. Without this backfill every existing roster looked origin-less and Save
+  // fell through to a downloaded copy.
+  if (!s.origin) s.origin = s.sheetsPulledAt ? 'sheet' : (s.sourceFileName ? 'file' : '');
   s.view = (s.view && typeof s.view === 'object') ? s.view : { order: [], hidden: {} };
   s.view.order = Array.isArray(s.view.order) ? s.view.order : [];
   s.view.hidden = (s.view.hidden && typeof s.view.hidden === 'object') ? s.view.hidden : {};
@@ -1556,12 +1561,32 @@ function active() { return S.players.filter(p => !p.archived); }
    inferring picked whichever came first in the list. One resolver answers the
    question, and the button, the chip and Ctrl+S all read it — so they cannot
    contradict each other about where the work is about to go. */
+/* Writing to the Sheet needs the bridge ADDRESS and nothing more — pushToSheets
+   requires exactly that, and deliberately handles the case where nobody else is
+   editing. sheetsOn() means something stronger: the Sheet is the shared source
+   of truth, with version guarding and polling.
+
+   Gating Save on sheetsOn() was wrong, and this is the bug behind "it doesn't
+   update the Google spreadsheet I loaded it from": pullFromSheets needs only the
+   address, so a roster can be LOADED from the Sheet while sheetsMode is off —
+   and Save then skipped past the Sheet and quietly wrote a downloaded file. */
+function canPushSheet() { return !!S.sheetsUrl; }
+
 function saveDestination() {
-  if (S.origin === 'sheet' && sheetsOn()) return 'sheet';
+  // Sheets mode is a deliberate declaration that the Sheet is the shared source
+  // of truth for the whole staff, so it outranks whatever local file THIS device
+  // happens to have linked — otherwise each coach saves to their own copy and
+  // the Sheet everyone is reading never moves.
+  if (sheetsOn()) return 'sheet';
+  if (S.origin === 'sheet') {
+    // It came out of the Sheet, so it goes back to the Sheet — provided this
+    // device knows how to reach it. The address is per-device, so a tablet that
+    // has not been given it is a real and separate case, not a silent fallback.
+    return canPushSheet() ? 'sheet' : 'sheet-unreachable';
+  }
   if (S.origin === 'file' && fileHandle) return 'file';
   // No recorded origin, or the recorded one is out of reach on this device (a
   // phone holds no file handle): fall back to whatever can actually be written.
-  if (sheetsOn()) return 'sheet';
   if (fileHandle) return 'file';
   return FSA ? 'pick' : 'download';
 }
@@ -1572,6 +1597,7 @@ function saveTargetLabel() {
     // Name the Sheet AND say it is a Sheet: its own title on its own reads like
     // a filename, which is the very confusion this label exists to end.
     case 'sheet': return S.sheetDocName ? S.sheetDocName + ' · Google Sheet' : 'Google Sheet (shared)';
+    case 'sheet-unreachable': return 'the Google Sheet — not linked on this device yet';
     case 'file':  return fileHandleName;
     case 'pick':  return S.sourceFileName || 'not linked yet';
     default:      return 'Downloads folder';
@@ -1582,6 +1608,7 @@ function saveTargetLabel() {
 function saveButtonLabel() {
   switch (saveDestination()) {
     case 'sheet': return 'Save to Sheet';
+    case 'sheet-unreachable': return 'Link the Sheet';
     case 'file':  return 'Save to ' + trimName(fileHandleName);
     case 'pick':  return 'Save workbook';
     default:      return 'Save a copy';
@@ -1605,7 +1632,30 @@ function trimName(n) {
 
 /** What Save actually does: write back to the source. */
 function saveToOrigin() {
-  return saveDestination() === 'sheet' ? pushToSheets() : exportWorkbook();
+  const dest = saveDestination();
+  if (dest === 'sheet') return pushToSheets();
+  if (dest === 'sheet-unreachable') return sheetNotLinkedHere();
+  return exportWorkbook();
+}
+
+/* This roster came out of a Google Sheet, but THIS device has never been given
+   the Sheet's link. The link is deliberately per-device — it is never written
+   into the Sheet and never published — so a coach opening the app on an iPad
+   for the first time has a roster that knows where it came from and a device
+   that cannot get there. Saying so beats silently downloading a copy that
+   nobody will remember to put back. */
+function sheetNotLinkedHere() {
+  openModal({
+    title: 'This device is not linked to the Sheet yet',
+    intro: 'This roster came from a Google Sheet, but the Sheet’s link has not been ' +
+           'entered on this device. The link is kept per device on purpose — it is never ' +
+           'stored in the Sheet and never published.',
+    body: '<div class="warnbox">Paste the same Apps Script link and token you use on your ' +
+          'other device, and Save will write straight to the Sheet here too.</div>',
+    foot: '<button class="btn" data-act="savecopyanyway">Save a copy instead</button>' +
+          '<button class="btn primary" data-act="settings">Add the link…</button>'
+  });
+  return false;
 }
 
 /** Keeps the toolbar honest about whether anything is being filtered out. */
@@ -5603,6 +5653,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'expxlsx':  closeMenus(); exportWorkbook(); break;
+    case 'savecopyanyway': closeModal(); exportWorkbook(); break;
     case 'expjson':  closeMenus(); backupJSON(); break;
     case 'expcsv':   closeMenus(); exportCSV(); break;
     case 'print':    closeMenus(); renderAll(); setTimeout(() => window.print(), 60); break;
@@ -6143,7 +6194,8 @@ window.AHS = {
   installState: installState, applyAddbar: applyAddbar, toggleAddbar: toggleAddbar,
   openSheetDoc: openSheetDoc, validSheetDocUrl: validSheetDocUrl, _noteSheetDoc: noteSheetDoc,
   _sheetsToWorkbook: sheetsToWorkbook,
-  saveDestination: saveDestination, _relayout: relayout,
+  saveDestination: saveDestination, saveToOrigin: saveToOrigin, _relayout: relayout,
+  _migrateProbe: o => migrate(Object.assign({ days: [], players: [] }, o)),
   _setHandle: h => { fileHandle = h; fileHandleName = h ? h.name : ''; }
 };
 })();
