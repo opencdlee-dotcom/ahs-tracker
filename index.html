@@ -197,6 +197,55 @@ button{cursor:pointer;background:none;border:none;padding:0}
 .daytab.del:hover:not(:disabled){color:var(--bad);border-color:var(--bad-br);background:var(--bad-bg)}
 .daytab.del:disabled{opacity:.35;cursor:default}
 
+/* ---------- column tabs ----------
+   The strip that says which pile of columns the roster is showing. It sits
+   directly on top of the table and shares its top border, so a tab reads as
+   the lid of the panel below it rather than as another row of toolbar. */
+.tabbar{
+  display:flex;align-items:center;gap:12px;
+  padding:7px 16px 0;background:var(--bg);border-bottom:1px solid var(--border);
+  flex:none;
+}
+/* min-width:0 or the strip refuses to shrink below its own tabs and shoves
+   the + Column button off the right edge of a phone. */
+.tabbar-in{display:flex;align-items:flex-end;gap:3px;overflow-x:auto;scrollbar-width:none;flex:1 1 auto;min-width:0}
+.tabbar-in::-webkit-scrollbar{display:none}
+.ptab{
+  height:32px;padding:0 12px;border-radius:8px 8px 0 0;
+  border:1px solid transparent;border-bottom:none;background:none;
+  font-size:13px;color:var(--dim);white-space:nowrap;
+  display:inline-flex;align-items:center;gap:6px;position:relative;top:1px;
+}
+.ptab:hover{background:var(--surface-2);color:var(--ink)}
+.ptab[aria-selected="true"]{
+  background:var(--surface);border-color:var(--border);color:var(--ink);font-weight:600;
+  box-shadow:0 -2px 0 var(--accent) inset;
+}
+.ptab-n{
+  font-size:11px;font-variant-numeric:tabular-nums;color:var(--faint);
+  background:var(--surface-2);border-radius:9px;padding:1px 6px;
+}
+.ptab[aria-selected="true"] .ptab-n{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+.ptab-mn{
+  width:18px;height:18px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;color:var(--faint);margin-right:-4px;
+}
+.ptab-mn:hover{background:var(--surface-2);color:var(--ink)}
+.ptab.add{color:var(--faint);font-weight:600;border-style:dashed;border-color:var(--border);border-bottom:none}
+.ptab.add:hover{color:var(--accent);border-color:var(--accent)}
+.tabbar-note{display:flex;align-items:center;gap:10px;padding-bottom:6px;font-size:12px;white-space:nowrap;flex:none}
+.tabbar-note .muted{overflow:hidden;text-overflow:ellipsis;max-width:38vw}
+
+/* the Tab picker in the column manager */
+.coltab{
+  flex:0 0 128px;height:28px;padding:0 6px;font-size:12px;
+  border:1px solid var(--border-strong);border-radius:6px;background:var(--surface);color:var(--ink);
+}
+.coltab.static{
+  display:inline-flex;align-items:center;justify-content:center;
+  border-style:dashed;color:var(--faint);
+}
+
 /* ---------- table ---------- */
 .tablewrap{flex:1 1 0;min-height:0;overflow:auto;background:var(--bg);position:relative}
 table{border-collapse:separate;border-spacing:0;width:100%;min-width:640px}
@@ -690,6 +739,10 @@ th.filtered .th-lbl{color:var(--accent)}
   .stat{min-width:0;padding:5px 10px}
   .stat .n{font-size:18px}
   .toolbar{padding:8px 11px;gap:8px}
+  .tabbar{padding:6px 11px 0;gap:8px}
+  /* The name of the panel you are in has to stay reachable, so the tabs
+     scroll rather than wrap; the reassurance text is what gives way. */
+  .tabbar-note .muted{display:none}
   .addbar{padding:8px 11px;gap:6px}
   .search{flex:1 1 100%}
   /* One scrolling row of chips instead of three stacked rows - on a phone
@@ -755,6 +808,12 @@ th.filtered .th-lbl{color:var(--accent)}
   .attday{width:64px}
   .pill{height:30px;padding:0 11px}
   .rowmenu{width:34px;height:34px}
+  /* A tab and the ⌄ that opens its menu are two targets 3mm apart, so the
+     smaller one gets grown until a thumb can choose between them. */
+  .ptab{height:40px;padding:0 13px}
+  .ptab-mn{width:28px;height:28px;font-size:13px;color:var(--dim);margin-right:-6px}
+  .ptab-mn:hover{background:none;color:var(--dim)}
+  .coltab{height:36px}
   .fchip,.chip,.btn{touch-action:manipulation}
   button,summary,label{touch-action:manipulation}
   /* Hover-only backgrounds just flash and stick under a finger. */
@@ -779,7 +838,7 @@ th.filtered .th-lbl{color:var(--accent)}
 
 /* ---------- notch, rounded corners, home indicator ---------- */
 @supports (padding: max(0px)){
-  .topbar,.stats,.toolbar,.addbar{
+  .topbar,.stats,.toolbar,.addbar,.tabbar{
     padding-left:max(11px, env(safe-area-inset-left));
     padding-right:max(11px, env(safe-area-inset-right));
   }
@@ -796,7 +855,7 @@ th.filtered .th-lbl{color:var(--accent)}
 /* ---------- print ---------- */
 @media print{
   body{overflow:visible;background:#fff;color:#000;font-size:11px}
-  .topbar,.stats,.toolbar,.addbar,.drawer,.scrim,.modal,#toasts,.c-mn,.c-nt,.c-fill,.c-email,.c-phone,.rowmenu,
+  .topbar,.stats,.toolbar,.tabbar,.addbar,.drawer,.scrim,.modal,#toasts,.c-mn,.c-nt,.c-fill,.c-email,.c-phone,.rowmenu,
   .th-menu,.th-ar{display:none !important}
   #app{display:block;height:auto}
   .tablewrap{overflow:visible;background:#fff}
@@ -916,6 +975,8 @@ th.filtered .th-lbl{color:var(--accent)}
     <label class="addbar-chk" title="Played last season"><input type="checkbox" id="addRet"> Returning</label>
     <button class="btn primary" type="submit">+ Add</button>
   </form>
+
+  <div class="tabbar" id="tabbar"></div>
 
   <div class="tablewrap" id="tablewrap">
     <div class="print-head">
@@ -1068,7 +1129,7 @@ let IDX = null;      // { active, seasons: [{id,label}] }
 let S = null;        // active season object
 let undoStack = [], redoStack = [];
 let lastSnapAt = 0;
-let filter = 'all', query = '', activeDay = null;
+let filter = 'all', query = '', activeDay = null, activeTab = 'all';
 
 function blankSeason(id, label, source) {
   return {
@@ -1100,10 +1161,11 @@ function blankSeason(id, label, source) {
     /* How the screen was left. Kept per season, so switching seasons puts you
        back where you were in THAT one. The search box is deliberately not
        here: text left in it on a later day reads as a roster gone missing. */
-    ui: { day: '', filter: 'all' },
+    ui: { day: '', filter: 'all', tab: 'all' },
     layout: null,
     customCols: [],
-    view: { order: [], hidden: {}, pick: {} },
+    tabs: [],              // the coach's column panels — see COLUMN TABS below
+    view: { order: [], hidden: {}, pick: {}, core: [] },
     updatedAt: new Date().toISOString()
   };
 }
@@ -1158,17 +1220,20 @@ function migrate(s) {
   s.ui = (s.ui && typeof s.ui === 'object') ? s.ui : {};
   s.ui.day = s.ui.day || '';
   s.ui.filter = FILTER_LABELS[s.ui.filter] ? s.ui.filter : 'all';
+  s.ui.tab = s.ui.tab || 'all';
   s.layout = s.layout || null;
   s.view = (s.view && typeof s.view === 'object') ? s.view : { order: [], hidden: {} };
   s.view.order = Array.isArray(s.view.order) ? s.view.order : [];
   s.view.hidden = (s.view.hidden && typeof s.view.hidden === 'object') ? s.view.hidden : {};
   s.view.pick = (s.view.pick && typeof s.view.pick === 'object') ? s.view.pick : {};
+  s.view.core = Array.isArray(s.view.core) ? s.view.core : [];
   delete s.view.exclude;   // the group filter became a selection, not an exclusion
   s.customCols = Array.isArray(s.customCols) ? s.customCols : [];
   s.customCols.forEach(c => {
     c.type = c.type === 'text' ? 'text' : 'choice';
     c.options = Array.isArray(c.options) ? c.options : [];
   });
+  migrateTabs(s);
   s.players.forEach(p => {
     if (p.noId && p.srcId === undefined) p.srcId = '';   // upgrade from the old flag
     p.attendance = p.attendance || {};
@@ -1413,6 +1478,7 @@ function renderAll() {
   renderStats();
   renderFilters();
   renderDaybar();
+  renderTabbar();
   renderTable();
   renderViewButton();
   renderSaveChip();
@@ -1737,6 +1803,19 @@ function columnMenuHTML(col, pinned) {
       '</div>';
   }
 
+  // Regrouping straight from the header, so putting a column under
+  // Transportation does not mean a trip through a panel to do one thing.
+  const home = homeOf(key);
+  const dests = CORE_KEYS.indexOf(key) >= 0 ? [] :
+    [['core', 'Main panel'], ['', 'All only']]
+      .concat((S.tabs || []).map(t => [t.id, t.label]));
+  const tabPart = dests.length
+    ? '<div class="sep"></div><div class="mlabel">Show under</div>' +
+      dests.map(d => '<button data-act="movetotab" data-k="' + esc(key) + '" data-t="' + esc(d[0]) + '"' +
+        (d[0] === home ? ' class="on" aria-current="true"' : '') + '>' +
+        (d[0] === home ? '✓ ' : '') + esc(d[1]) + '</button>').join('')
+    : '';
+
   return '<div class="mlabel">' + esc(col.plain || (col.label === '#' ? '#' : col.label)) + '</div>' +
     '<button data-act="sortasc" data-k="' + esc(key) + '">Sort A → Z</button>' +
     '<button data-act="sortdesc" data-k="' + esc(key) + '">Sort Z → A</button>' +
@@ -1746,6 +1825,7 @@ function columnMenuHTML(col, pinned) {
       '<button data-act="movecol" data-k="' + esc(key) + '" data-dir="-1">Move left</button>' +
       '<button data-act="movecol" data-k="' + esc(key) + '" data-dir="1">Move right</button>' +
       '<button data-act="hidecol" data-k="' + esc(key) + '">Hide this column</button>') +
+    tabPart +
     '<div class="sep"></div>' +
     '<button data-act="managecols">All columns…</button>';
 }
@@ -1936,7 +2016,7 @@ function parseOptionList(text) {
     .slice(0, 24)
     .map(v => ({ value: v }));
 }
-function addCustomCol(label, type, optionText) {
+function addCustomCol(label, type, optionText, dest) {
   label = String(label || '').trim();
   if (!label) return null;
   const col = {
@@ -1948,6 +2028,11 @@ function addCustomCol(label, type, optionText) {
   commit('add column', () => {
     S.customCols = S.customCols || [];
     S.customCols.push(col);
+    // Born into whichever tab asked for it, so "+ Column" on Transportation
+    // does not drop the column somewhere the coach then has to go find it.
+    const key = 'cc:' + col.id;
+    if (dest === 'core') S.view.core.push(key);
+    else { const t = tabById(dest); if (t) t.cols.push(key); }
   });
   return col;
 }
@@ -1985,6 +2070,20 @@ function naturalColumns() {
   });
   cols.push({ key: 'email', label: 'Email',  cls: 'c-email', title: 'Sort by email — blanks last' });
   cols.push({ key: 'phone', label: 'Cell #', cls: 'c-phone', title: 'Sort by cell number — blanks last' });
+
+  // Columns pinned to the main panel default to sitting with the rest of it,
+  // beside Grade, rather than out at the far right among the custom columns.
+  // This is the NATURAL order only: an arrangement the coach made by dragging
+  // is held in S.view.order and still wins over it.
+  const core = (S.view && S.view.core) || [];
+  if (core.length) {
+    const at = cols.findIndex(c => c.key === 'grade');
+    const pinned = [];
+    for (let i = cols.length - 1; i > at; i--) {
+      if (core.indexOf(cols[i].key) >= 0) pinned.unshift(cols.splice(i, 1)[0]);
+    }
+    cols.splice(at + 1, 0, ...pinned);
+  }
   return cols;
 }
 
@@ -2020,7 +2119,278 @@ function orderedColumns() {
 }
 
 function isHidden(key) { return !!(S.view && S.view.hidden && S.view.hidden[key]); }
-function visibleColumns() { return orderedColumns().filter(c => !isHidden(c.key)); }
+
+/* ============================================================= COLUMN TABS
+   A roster carries more columns than a screen can hold, and they fall into
+   natural piles: who is cleared to play, who rides which bus, who has a
+   jersey. Tabs are those piles. The main panel — #, Student, Grade, and
+   whatever else the coach pins beside them — never leaves, so whichever tab is
+   showing you can still tell whose row you are reading.
+
+   A column belongs to at most one tab. Anything unassigned shows under "All",
+   which is built in and cannot be deleted or emptied — so no arrangement can
+   strand a column somewhere there is no way back to.
+
+   Mind the vocabulary: "group" already means something else in this file — the
+   View button filters ROWS by a column's value. These are tabs. */
+
+const CORE_KEYS = ['id', 'name', 'grade'];   // the main panel, always on screen
+const ALL_TAB = 'all';
+const TAB_MAX = 12;
+
+function migrateTabs(s) {
+  s.tabs = (Array.isArray(s.tabs) ? s.tabs : [])
+    .filter(t => t && t.id && t.id !== ALL_TAB).slice(0, TAB_MAX);
+  const seen = {};
+  s.tabs.forEach(t => {
+    t.label = String(t.label || 'Tab').slice(0, 40);
+    // One column, one tab. The same column in two tabs would make "take it out
+    // of here" ambiguous about which "here" was meant.
+    t.cols = (Array.isArray(t.cols) ? t.cols : [])
+      .filter(k => CORE_KEYS.indexOf(k) < 0 && !seen[k] && (seen[k] = true));
+  });
+  s.view.core = s.view.core.filter((k, i, a) =>
+    CORE_KEYS.indexOf(k) < 0 && a.indexOf(k) === i && !seen[k]);
+  seedLevelColumn(s);
+  if (s.ui.tab !== ALL_TAB && !s.tabs.some(t => t.id === s.ui.tab)) s.ui.tab = ALL_TAB;
+}
+
+/* Level belongs next to Grade because that is how one coach describes a player
+   to another — "the JV sophomore". It is deliberately an ordinary column
+   rather than a built-in, so it exports, imports, recolours and can be renamed
+   or deleted like any other. Seeding happens once and records that it
+   happened, so a coach who deletes it does not find it back after a reload. */
+const LEVEL_RE = /^(level|team|squad|tier)$/i;
+
+function seedLevelColumn(s) {
+  if (s.levelSeeded) return;
+  s.levelSeeded = true;
+  const found = (s.customCols || []).find(c => LEVEL_RE.test(String(c.label || '').trim()));
+  const col = found || {
+    id: 'c' + uid(), label: 'Level', type: 'choice',
+    options: parseOptionList('Varsity / JV / Frosh-Soph')
+  };
+  if (!found) s.customCols.push(col);
+  if (s.view.core.indexOf('cc:' + col.id) < 0) s.view.core.push('cc:' + col.id);
+}
+
+function isCore(key) {
+  return CORE_KEYS.indexOf(key) >= 0 || (S.view.core || []).indexOf(key) >= 0;
+}
+function tabById(id) { return (S.tabs || []).find(t => t.id === id) || null; }
+function tabOf(key) { return (S.tabs || []).find(t => t.cols.indexOf(key) >= 0) || null; }
+
+/** The showing tab, self-healing if it was deleted in another window or undone. */
+function activeTabId() {
+  if (activeTab !== ALL_TAB && !tabById(activeTab)) activeTab = ALL_TAB;
+  return activeTab;
+}
+function inActiveTab(key) {
+  const id = activeTabId();
+  if (id === ALL_TAB || isCore(key)) return true;
+  const t = tabById(id);
+  return !!t && t.cols.indexOf(key) >= 0;
+}
+
+function visibleColumns() {
+  return orderedColumns().filter(c => !isHidden(c.key) && inActiveTab(c.key));
+}
+
+/** Where a column lives: 'core', a tab id, or '' for none. */
+function homeOf(key) {
+  if (isCore(key)) return 'core';
+  const t = tabOf(key);
+  return t ? t.id : '';
+}
+
+/** Moves a column into a tab, into the main panel, or out of both. */
+function assignColumn(key, dest) {
+  if (CORE_KEYS.indexOf(key) >= 0) return;     // # / Student / Grade are fixed
+  if (homeOf(key) === dest) return;
+  commit('move column', () => {
+    S.tabs.forEach(t => { t.cols = t.cols.filter(k => k !== key); });
+    S.view.core = (S.view.core || []).filter(k => k !== key);
+    if (dest === 'core') S.view.core.push(key);
+    else { const t = tabById(dest); if (t) t.cols.push(key); }
+    // Putting a column somewhere is asking to see it, so it stops being hidden.
+    if (S.view.hidden) delete S.view.hidden[key];
+  });
+}
+
+/** Takes a deleted column out of every tab, so no tab counts a ghost. */
+function forgetColumn(key) {
+  (S.tabs || []).forEach(t => { t.cols = t.cols.filter(k => k !== key); });
+  if (S.view && S.view.core) S.view.core = S.view.core.filter(k => k !== key);
+}
+
+function addTab(label) {
+  label = String(label || '').trim().slice(0, 40);
+  if (!label) return null;
+  if ((S.tabs || []).length >= TAB_MAX) { toast('That is as many tabs as fit — ' + TAB_MAX); return null; }
+  if (S.tabs.some(t => norm(t.label) === norm(label))) { toast('There is already a “' + label + '” tab'); return null; }
+  const t = { id: 't' + uid(), label: label, cols: [] };
+  commit('add tab', () => { S.tabs.push(t); });
+  return t;
+}
+
+function renameTab(id) {
+  const t = tabById(id);
+  if (!t) return;
+  promptModal('Rename tab', 'What the tab is called above the roster.', 'Tab name', t.label, 'Rename', v => {
+    const label = String(v || '').trim().slice(0, 40);
+    if (!label) return toast('Give the tab a name');
+    if (S.tabs.some(x => x.id !== id && norm(x.label) === norm(label))) return toast('There is already a “' + label + '” tab');
+    commit('rename tab', () => { t.label = label; });
+    renderAll();
+  });
+}
+
+function removeTab(id) {
+  const t = tabById(id);
+  if (!t) return;
+  const n = t.cols.length;
+  confirmModal('Delete the “' + t.label + '” tab?',
+    n ? 'The ' + n + ' column' + (n === 1 ? '' : 's') + ' in it stay, along with everything recorded in them — they go back to showing under All.'
+      : 'It has no columns in it.',
+    'Delete tab', () => {
+      commit('delete tab', () => { S.tabs = S.tabs.filter(x => x.id !== id); });
+      if (activeTab === id) activeTab = ALL_TAB;
+      rememberUiState();
+      renderAll();
+      toast('Tab deleted', 6000, 'Undo', undo);
+    });
+}
+
+function newTab() {
+  promptModal('New tab', 'A tab is a pile of columns you want to see together — Transportation, Equipment, Paperwork.',
+    'Tab name', '', 'Create tab', v => {
+      const t = addTab(v);
+      if (!t) return;
+      activeTab = t.id;
+      rememberUiState();
+      renderAll();
+      openColumnManager();
+      toast('Put columns into “' + t.label + '” with the Tab picker beside each one');
+    });
+}
+
+/* ---- the strip above the roster ---- */
+function renderTabbar() {
+  const cur = activeTabId();
+  const counts = { };
+  (S.tabs || []).forEach(t => { counts[t.id] = t.cols.filter(k => !isHidden(k)).length; });
+  const html = ['<div class="tabbar-in" role="tablist" aria-label="Column tabs">'];
+  html.push(tabButton(ALL_TAB, 'All', cur === ALL_TAB, 0));
+  (S.tabs || []).forEach(t => html.push(tabButton(t.id, t.label, cur === t.id, counts[t.id])));
+  html.push('<button class="ptab add" data-act="tabadd" title="Group some columns under a new tab">+ Tab</button>');
+  html.push('</div>');
+  html.push('<div class="tabbar-note">' +
+    (cur === ALL_TAB
+      ? '<span class="muted">Every column</span>'
+      : '<button class="btn tiny" data-act="tabaddcol" data-t="' + esc(cur) + '">+ Column</button>' +
+        '<span class="muted">Always showing: ' + esc(coreNames()) + '</span>') +
+    '</div>');
+  $('#tabbar').innerHTML = html.join('');
+}
+
+function tabButton(id, label, on, n) {
+  return '<button class="ptab" data-act="tabpick" data-t="' + esc(id) + '" role="tab" aria-selected="' + on + '">' +
+    '<span class="ptab-tx">' + esc(label) + '</span>' +
+    (id === ALL_TAB ? '' :
+      '<span class="ptab-n" title="' + n + ' column' + (n === 1 ? '' : 's') + ' showing">' + n + '</span>' +
+      '<span class="ptab-mn" data-act="tabmenu" data-t="' + esc(id) + '" role="button" tabindex="0"' +
+        ' title="Rename, add columns to, or delete this tab" aria-label="Tab options">⌄</span>') +
+    '</button>';
+}
+
+/** The names in the main panel, for the "always showing" reassurance. */
+function coreNames() {
+  const nat = naturalColumns();
+  const names = [];
+  ['name', 'grade'].concat(S.view.core || []).forEach(k => {
+    const c = nat.find(x => x.key === k);
+    if (c) names.push(c.plain || c.label);
+  });
+  return names.join(', ');
+}
+
+function tabMenu(id, anchorEl) {
+  closeMenus();
+  const t = tabById(id);
+  if (!t) return;
+  const pop = document.createElement('div');
+  pop.className = 'menu';
+  pop.id = 'rowMenuPop';
+  pop.style.position = 'fixed';
+  pop.style.right = 'auto';
+  pop.style.maxWidth = '260px';
+  pop.innerHTML =
+    '<div class="mlabel">' + esc(t.label) + '</div>' +
+    '<button data-act="tabaddcol" data-t="' + esc(id) + '">Add a column here…</button>' +
+    '<button data-act="tabcols" data-t="' + esc(id) + '">Choose which columns…</button>' +
+    '<div class="sep"></div>' +
+    '<button data-act="tabrename" data-t="' + esc(id) + '">Rename…</button>' +
+    '<button data-act="tabdel" data-t="' + esc(id) + '">Delete this tab</button>';
+  document.body.appendChild(pop);
+  const r = anchorEl.getBoundingClientRect();
+  pop.style.top = Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8) + 'px';
+  pop.style.left = Math.max(8, Math.min(r.left - 8, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+}
+
+function pickTab(id) {
+  activeTab = (id === ALL_TAB || tabById(id)) ? id : ALL_TAB;
+  rememberUiState();
+  renderAll();
+}
+
+/* ---- surviving an import -------------------------------------------------
+   Every import rebuilds the columns with fresh ids, so an arrangement stored
+   as ids would be orphaned by the routine act of re-reading the spreadsheet.
+   Both sides of the trip therefore speak in column NAMES. */
+
+/** The arrangement as names. Must be read BEFORE the columns are replaced. */
+function snapTabLayout() {
+  const nat = naturalColumns();
+  const nameOf = k => { const c = nat.find(x => x.key === k); return c ? (c.plain || c.label) : null; };
+  const rows = [{ core: true, label: 'Main panel', cols: (S.view.core || []).map(nameOf).filter(Boolean) }];
+  (S.tabs || []).forEach(t => rows.push({ core: false, label: t.label, cols: t.cols.map(nameOf).filter(Boolean) }));
+  return rows;
+}
+
+/** Column name → key, against whatever columns exist right now. */
+function columnKeyByName() {
+  const map = {};
+  naturalColumns().forEach(c => {
+    const n = norm(c.plain || (c.label === '#' ? '#' : c.label));
+    if (n && !map[n]) map[n] = c.key;
+  });
+  return map;
+}
+
+/** Puts the arrangement back on the new columns, by name. */
+function rebindTabs(layout) {
+  if (!layout || !layout.length) return;
+  const byName = columnKeyByName();
+  const tabs = [];
+  let core = [];
+  layout.forEach(row => {
+    const keys = (row.cols || []).map(n => byName[norm(n)])
+      .filter(k => k && CORE_KEYS.indexOf(k) < 0);
+    if (row.core) core = keys;
+    else if (row.label) tabs.push({ id: 't' + uid(), label: row.label, cols: keys });
+  });
+  S.tabs = tabs;
+  S.view.core = core;
+  migrateTabs(S);
+}
+
+/** Swaps in imported columns and carries the arrangement across with them. */
+function adoptColumns(res) {
+  const keep = snapTabLayout();
+  if (res.customCols) S.customCols = res.customCols;
+  // What the workbook said wins; failing that, what this device already had.
+  rebindTabs(res.tabLayout || keep);
+}
 
 /** Writes the current arrangement down so it survives a reload. */
 function saveArrangement(cols) {
@@ -2058,7 +2428,13 @@ function moveColumn(key, dir) {
 }
 
 function resetColumns() {
-  commit('reset columns', () => { S.view = { order: [], hidden: {} }; });
+  // Order and hiding reset; the tabs and the main panel do not. Those are the
+  // arrangement the coach built on purpose, not the one they want undone by a
+  // button labelled "Reset order".
+  commit('reset columns', () => {
+    S.view.order = [];
+    S.view.hidden = {};
+  });
   renderAll();
   toast('Columns back to their original order');
 }
@@ -2605,7 +2981,33 @@ function parseWorkbook(wb) {
   const daysWs = findSheet(wb, 'days');
   if (daysWs) applyDaySheet(daysWs, res);
 
+  const tabsWs = findSheet(wb, 'tabs');
+  if (tabsWs) applyTabSheet(tabsWs, res);
+
   return res;
+}
+
+/* The Tabs sheet records the arrangement by column NAME, not by id — ids are
+   regenerated on every import, and a sheet full of stale ones would restore
+   nothing. Names are also what a human can read and edit in the spreadsheet. */
+const CORE_ROW = 'main panel';
+
+function applyTabSheet(ws, res) {
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: false, defval: null });
+  if (rows.length < 2) return;
+  const hdr = (rows[0] || []).map(c => norm(cellText(c)));
+  const ti = hdr.indexOf('tab'), ci = hdr.indexOf('columns');
+  if (ti < 0 || ci < 0) return;
+
+  const out = [];
+  for (let r = 1; r < rows.length; r++) {
+    const label = cellText((rows[r] || [])[ti]).trim();
+    if (!label) continue;
+    const cols = String(cellText(rows[r][ci]) || '')
+      .split(/[\n,\/|;]+/).map(s => s.trim()).filter(Boolean);
+    out.push({ core: norm(label) === CORE_ROW, label: label, cols: cols });
+  }
+  if (out.length) res.tabLayout = out;
 }
 
 
@@ -2894,7 +3296,7 @@ function applyImport(res, mode) {
     undoStack = []; redoStack = [];
     if (res.ratingFields && res.ratingFields.length) S.ratingFields = res.ratingFields;
     if (res.layout) S.layout = res.layout;
-    if (res.customCols) S.customCols = res.customCols;
+    adoptColumns(res);
     S.days = res.days;
     S.players = res.players;
     activeDay = S.days.length ? S.days[0].id : null;
@@ -2907,7 +3309,7 @@ function applyImport(res, mode) {
     if (mode === 'replace') {
       if (res.ratingFields && res.ratingFields.length) S.ratingFields = res.ratingFields;
       if (res.layout) S.layout = res.layout;
-      if (res.customCols) S.customCols = res.customCols;
+      adoptColumns(res);
       S.days = res.days;
       S.players = res.players;
     } else {
@@ -3172,6 +3574,16 @@ function buildWorkbook() {
     const ws5 = XLSX.utils.aoa_to_sheet(ca);
     ws5['!cols'] = [{ wch: 24 }, { wch: 10 }, { wch: 52 }];
     XLSX.utils.book_append_sheet(wb, ws5, 'Columns');
+  }
+
+  /* Tabs — which panel shows which columns, written by name so a reload puts
+     the arrangement back instead of orphaning it on regenerated ids. */
+  const tl = snapTabLayout().filter(r => r.cols.length);
+  if (tl.length) {
+    const ta = [['Tab', 'Columns']].concat(tl.map(r => [r.label, r.cols.join(' / ')]));
+    const ws7 = XLSX.utils.aoa_to_sheet(ta);
+    ws7['!cols'] = [{ wch: 22 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws7, 'Tabs');
   }
 
   /* Archived — athletes taken off the roster but whose record is kept. Without
@@ -3453,7 +3865,7 @@ async function refreshFromFile(opts) {
     S.players = res.players;
     if (res.ratingFields && res.ratingFields.length) S.ratingFields = res.ratingFields;
     if (res.layout) S.layout = res.layout;
-    if (res.customCols) S.customCols = res.customCols;
+    adoptColumns(res);
     S.sourceFileName = res.fileName || S.sourceFileName;
   });
   // On screen and on disk now agree, so nothing is pending.
@@ -3636,7 +4048,7 @@ function applySheetsPayload(data, mode) {
       S.players = res.players;
       if (res.ratingFields && res.ratingFields.length) S.ratingFields = res.ratingFields;
       if (res.layout) S.layout = res.layout;
-      if (res.customCols) S.customCols = res.customCols;
+      adoptColumns(res);
     });
     // On screen and in the Sheet now agree, so nothing is pending.
     S.changesSinceExport = 0;
@@ -3983,6 +4395,7 @@ function removeDay(id, after) {
       if (S.view) {
         if (S.view.hidden) delete S.view.hidden['day:' + id];
         S.view.order = (S.view.order || []).filter(k => k !== 'day:' + id);
+        forgetColumn('day:' + id);
       }
     });
     if (activeDay === id) activeDay = S.days[0].id;
@@ -4063,12 +4476,17 @@ function refreshViewPanel(keepG, keepV) {
 }
 
 /* ------------------------------------------------------- column manager UI */
-function columnManagerBody() {
+function columnManagerBody(dest) {
   const cols = orderedColumns();
   const movable = cols.filter(c => !c.anchor && c.key !== 'id');
   const hiddenCount = cols.filter(c => isHidden(c.key)).length;
 
   const rows = cols.map(c => {
+    const fixed = CORE_KEYS.indexOf(c.key) >= 0;
+    const tabPick = fixed
+      ? '<span class="coltab static" title="The main panel always shows">Main panel</span>'
+      : '<select class="coltab" data-col-tab="' + esc(c.key) + '" aria-label="Which tab shows ' +
+        esc(c.plain || c.label) + '">' + tabOptionsHTML(homeOf(c.key)) + '</select>';
     const cc = c.custom;
     const hidden = isHidden(c.key);
     const mi = movable.findIndex(m => m.key === c.key);
@@ -4093,6 +4511,8 @@ function columnManagerBody() {
             ? (cc.type === 'text' ? 'Free text' : (cc.options || []).length + ' choices')
             : (pinned ? 'always first' : (hidden ? 'hidden' : ''))) + '</span>' +
 
+        tabPick +
+
         '<button class="btn tiny" data-act="movecol" data-k="' + c.key + '" data-dir="-1"' +
           (pinned || mi <= 0 ? ' disabled' : '') + ' title="Move left">←</button>' +
         '<button class="btn tiny" data-act="movecol" data-k="' + c.key + '" data-dir="1"' +
@@ -4114,14 +4534,18 @@ function columnManagerBody() {
   return '<div class="colmgr">' + rows + '</div>' +
     '<div class="colmgr-foot">' +
       (hiddenCount ? '<span class="muted">' + hiddenCount + ' hidden</span>' : '<span class="muted">All columns showing</span>') +
+      '<span class="muted">Tab decides which panel shows a column. <strong>Main panel</strong> shows in every tab; ' +
+        '<strong>All only</strong> shows on the All tab.</span>' +
       '<button class="btn tiny" data-act="resetcols">Reset order</button>' +
     '</div>' +
     '<div class="newcol">' +
       '<div class="frow">' +
         '<div class="field"><label for="ncLabel">New column name</label>' +
-          '<input id="ncLabel" placeholder="e.g. Uniform returned" spellcheck="false"></div>' +
+          '<input id="ncLabel" placeholder="e.g. Bus number" spellcheck="false"></div>' +
         '<div class="field" style="flex:0 0 148px"><label for="ncType">Kind</label>' +
           '<select id="ncType"><option value="choice">Pick from a list</option><option value="text">Free text</option></select></div>' +
+        '<div class="field" style="flex:0 0 148px"><label for="ncTab">Tab</label>' +
+          '<select id="ncTab">' + tabOptionsHTML(dest || '') + '</select></div>' +
       '</div>' +
       '<div class="field" id="ncOptsWrap" style="margin-top:8px">' +
         '<label for="ncOpts">Choices — separate with / or a comma</label>' +
@@ -4136,14 +4560,47 @@ function columnManagerBody() {
     '</div>';
 }
 
-function openColumnManager() {
+/** `intoTab` presets the new-column form, so "+ Column" on a tab lands there. */
+function openColumnManager(intoTab) {
+  const dest = tabById(intoTab) ? intoTab : (tabById(activeTabId()) ? activeTabId() : '');
   openModal({
     title: 'Columns',
-    intro: 'Hide what you are not using, drag the order about with the arrows, and add columns of your own. ' +
-           'Hiding only changes this screen — nothing is removed from the spreadsheet.',
-    body: columnManagerBody(),
+    intro: 'Hide what you are not using, move columns between tabs, and add columns of your own. ' +
+           'Hiding and grouping only change this screen — nothing is removed from the spreadsheet.',
+    body: columnManagerBody(dest),
     foot: '<button class="btn primary" data-act="closecolmgr">Done</button>'
   });
+  if (intoTab && $('#ncLabel')) $('#ncLabel').focus();
+}
+
+/** The Tab picker that appears beside every column, and on the new-column form. */
+function tabOptionsHTML(selected) {
+  return '<option value="core"' + (selected === 'core' ? ' selected' : '') + '>Main panel</option>' +
+    '<option value=""' + (selected === '' ? ' selected' : '') + '>All only</option>' +
+    (S.tabs || []).map(t => '<option value="' + esc(t.id) + '"' +
+      (selected === t.id ? ' selected' : '') + '>' + esc(t.label) + '</option>').join('');
+}
+
+/** Applies the Tab pickers in one pass, so several moves cost one undo step. */
+function saveColumnTabs() {
+  const sels = $$('[data-col-tab]');
+  const moves = [];
+  sels.forEach(el => {
+    const key = el.dataset.colTab;
+    if (CORE_KEYS.indexOf(key) >= 0) return;
+    if (el.value !== homeOf(key)) moves.push([key, el.value]);
+  });
+  if (!moves.length) return false;
+  commit('move columns', () => {
+    moves.forEach(m => {
+      const key = m[0], dest = m[1];
+      S.tabs.forEach(t => { t.cols = t.cols.filter(k => k !== key); });
+      S.view.core = (S.view.core || []).filter(k => k !== key);
+      if (dest === 'core') S.view.core.push(key);
+      else { const t = tabById(dest); if (t) t.cols.push(key); }
+    });
+  });
+  return true;
 }
 
 function submitNewColumn() {
@@ -4156,11 +4613,14 @@ function submitNewColumn() {
     if ($('#ncOpts')) $('#ncOpts').focus();
     return;
   }
-  const col = addCustomCol(label, type, opts);
+  const dest = $('#ncTab') ? $('#ncTab').value : '';
+  saveColumnEdits(); saveColumnTabs();      // don't lose edits made further up
+  const col = addCustomCol(label, type, opts, dest);
   if (!col) return;
-  openColumnManager();
+  const t = tabById(dest);
+  openColumnManager(dest);
   renderAll();
-  toast('Added the “' + col.label + '” column');
+  toast('Added the “' + col.label + '” column' + (t ? ' to ' + t.label : ''));
 }
 
 function removeCustomCol(id) {
@@ -4175,6 +4635,7 @@ function removeCustomCol(id) {
         if (S.view) {
           if (S.view.hidden) delete S.view.hidden['cc:' + id];
           S.view.order = (S.view.order || []).filter(k => k !== 'cc:' + id);
+          forgetColumn('cc:' + id);
         }
       });
       if (S.sort.key === 'cc:' + id) S.sort = { key: 'id', dir: 1 };
@@ -4245,6 +4706,25 @@ function confirmModal(title, msg, confirmLabel, fn, onCancel) {
   $('#confirmGo').onclick = () => { closeModal(); fn(); };
   // Backing out returns to whatever panel asked the question.
   $('#confirmNo').onclick = () => { closeModal(); if (onCancel) onCancel(); };
+}
+
+/** Asks for one line of text. Enter commits, so naming a tab is type-and-go. */
+function promptModal(title, intro, label, value, okLabel, fn) {
+  openModal({
+    title: esc(title), intro: esc(intro),
+    body: '<div class="field"><label for="promptVal">' + esc(label) + '</label>' +
+          '<input id="promptVal" value="' + esc(value || '') + '" spellcheck="false" autocomplete="off"></div>',
+    foot: '<button class="btn" data-act="closemodal">Cancel</button>' +
+          '<button class="btn primary" id="promptGo">' + esc(okLabel) + '</button>'
+  });
+  const input = $('#promptVal');
+  const go = () => { const v = input.value; closeModal(); fn(v); };
+  $('#promptGo').onclick = go;
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); go(); }
+  });
+  input.focus();
+  input.select();
 }
 
 /* ============================================================== SETTINGS */
@@ -4646,6 +5126,56 @@ function runDiagnostics() {
      parseAtt('late') === 'L' && parseAtt('Excused') === 'E' && parseAtt('') === null) || 'mapping failed');
   t('browser storage is writable', () => storageOK === true || 'localStorage is blocked in this browser');
 
+  /* Column tabs. An import regenerates every column id, so an arrangement kept
+     as ids would empty itself on the routine act of re-reading the spreadsheet
+     — which is why both ends of the trip speak in names. Both ends are checked:
+     the Tabs sheet, and the fallback for a workbook that has no Tabs sheet. */
+  const tabTrip = (dropTabSheet) => {
+    const prevS = S;
+    try {
+      const s = migrate(blankSeason('tabtest', 'Tab Test', 't.xlsx'));
+      s.players.push({ id: 1, name: 'A. Test', grade: '10', email: '', phone: '', returning: false,
+        clearance: 'yes', attendance: {}, evals: [], archived: false, custom: {} });
+      s.customCols = [{ id: 'cb', label: 'Bus number', type: 'text', options: [] },
+                      { id: 'cj', label: 'Jersey', type: 'choice', options: parseOptionList('Home / Away') }];
+      s.tabs = [{ id: 't1', label: 'Transportation', cols: ['cc:cb'] },
+                { id: 't2', label: 'Equipment', cols: ['cc:cj'] }];
+      s.view.core = ['phone'];
+      S = s;
+      const w = buildWorkbook();
+      const buf2 = XLSX.write(w, { bookType: 'xlsx', type: 'array' });
+      const re2 = XLSX.read(buf2, { type: 'array', cellDates: true });
+      if (dropTabSheet) {
+        const at = re2.SheetNames.indexOf('Tabs');
+        if (at < 0) return 'no Tabs sheet was written';
+        re2.SheetNames.splice(at, 1);
+        delete re2.Sheets.Tabs;
+      }
+      const got = parseWorkbook(re2);
+      // Land it in a season that still has the OLD ids, the way a reload does.
+      S = s;
+      adoptColumns(got);
+      const shape = S.tabs.map(x =>
+        x.label + ':' + x.cols.map(k => (customCol(k.slice(3)) || { label: k }).label).join('+')).join(' | ');
+      const core = (S.view.core || []).join(',');
+      return (shape === 'Transportation:Bus number | Equipment:Jersey' && core === 'phone')
+        || shape + ' / core=' + core;
+    } catch (e) { return String(e.message || e);
+    } finally { S = prevS; }
+  };
+  t('column tabs survive a save and reload', () => tabTrip(false));
+  t('column tabs survive a workbook that has no Tabs sheet', () => tabTrip(true));
+  t('a deleted column leaves no ghost in a tab', () => {
+    const prevS = S;
+    try {
+      S = migrate(blankSeason('tabtest2', 'Tab Test 2', 't.xlsx'));
+      S.customCols = [{ id: 'cb', label: 'Bus number', type: 'text', options: [] }];
+      S.tabs = [{ id: 't1', label: 'Transportation', cols: ['cc:cb'] }];
+      forgetColumn('cc:cb');
+      return S.tabs[0].cols.length === 0 || 'still holds ' + S.tabs[0].cols.join(',');
+    } finally { S = prevS; }
+  });
+
   S = prev;
   S = migrate(JSON.parse(saved));
   showDiagnostics(results);
@@ -4752,6 +5282,14 @@ document.addEventListener('click', e => {
     case 'cyclecustom': { const c = customCol(el.dataset.c); if (p && c) cycleCustom(p, c, el); break; }
     case 'managecols': closeMenus(); openColumnManager(); break;
     case 'colmenu':  e.stopPropagation(); columnMenu(el.dataset.k, el); return;
+    case 'tabpick':  closeMenus(); pickTab(el.dataset.t); break;
+    case 'tabmenu':  e.stopPropagation(); tabMenu(el.dataset.t, el); return;
+    case 'tabadd':   closeMenus(); newTab(); break;
+    case 'tabrename': closeMenus(); renameTab(el.dataset.t); break;
+    case 'tabdel':   closeMenus(); removeTab(el.dataset.t); break;
+    case 'tabcols':  closeMenus(); openColumnManager(); break;
+    case 'tabaddcol': closeMenus(); openColumnManager(el.dataset.t); break;
+    case 'movetotab': closeMenus(); assignColumn(el.dataset.k, el.dataset.t); renderAll(); break;
     case 'hidecol':  closeMenus(); toggleColumn(el.dataset.k); break;
     case 'sortasc':  closeMenus(); S.sort = { key: el.dataset.k, dir: 1 }; persist(); renderTable(); break;
     case 'sortdesc': closeMenus(); S.sort = { key: el.dataset.k, dir: -1 }; persist(); renderTable(); break;
@@ -4762,10 +5300,10 @@ document.addEventListener('click', e => {
     case 'clrgroups': clearGroupFilters(); refreshViewPanel(); return;
     case 'addcol':   submitNewColumn(); break;
     case 'delcol':   removeCustomCol(el.dataset.c); break;
-    case 'closecolmgr': if (saveColumnEdits()) renderAll(); closeModal(); break;
+    case 'closecolmgr': { const a = saveColumnEdits(), b = saveColumnTabs(); if (a || b) renderAll(); closeModal(); break; }
     case 'preset': { const t = $('#ncType'); if (t) t.value = 'choice'; const o = $('#ncOpts'); if (o) o.value = el.dataset.v; const w = $('#ncOptsWrap'); if (w) w.hidden = false; break; }
-    case 'movecol':  saveColumnEdits(); moveColumn(el.dataset.k, Number(el.dataset.dir)); openColumnManager(); break;
-    case 'togglecol': saveColumnEdits(); toggleColumn(el.dataset.k); openColumnManager(); break;
+    case 'movecol':  saveColumnEdits(); saveColumnTabs(); moveColumn(el.dataset.k, Number(el.dataset.dir)); openColumnManager(); break;
+    case 'togglecol': saveColumnEdits(); saveColumnTabs(); toggleColumn(el.dataset.k); openColumnManager(); break;
     case 'resetcols': resetColumns(); openColumnManager(); break;
     case 'ret':      if (p) toggleRet(p, el); break;
     case 'open':     closeMenus(); if (p) openDrawer(p.id); break;
@@ -5168,15 +5706,17 @@ function restoreUiState() {
   // "Archived" is a place to visit, not a place to be left standing when the
   // roster is empty of them — it would look like everyone had vanished.
   if (filter === 'archived' && !S.players.some(p => p.archived)) filter = 'all';
+  activeTab = (S.ui && S.ui.tab && tabById(S.ui.tab)) ? S.ui.tab : ALL_TAB;
   query = '';
 }
 
-/** Remembers the day and the filter chip, without touching anything else. */
+/** Remembers the day, the filter chip and the tab, without touching anything else. */
 function rememberUiState() {
-  if (!S.ui) S.ui = { day: '', filter: 'all' };
-  if (S.ui.day === activeDay && S.ui.filter === filter) return;
+  if (!S.ui) S.ui = { day: '', filter: 'all', tab: ALL_TAB };
+  if (S.ui.day === activeDay && S.ui.filter === filter && S.ui.tab === activeTab) return;
   S.ui.day = activeDay || '';
   S.ui.filter = filter;
+  S.ui.tab = activeTab || ALL_TAB;
   persist();
 }
 
@@ -5340,9 +5880,13 @@ window.AHS = {
   toggleColumn: toggleColumn, moveColumn: moveColumn, removeDay: removeDay, undo: undo,
   resetColumns: resetColumns,
   activeDay: () => activeDay, applyImport: applyImport, newSeason: newSeason, switchSeason: switchSeason, redo: redo,
+  activeTab: () => activeTab, pickTab: pickTab, addTab: addTab, assignColumn: assignColumn,
+  visibleColumns: () => visibleColumns().map(c => c.key),
+  _freshSeason: () => migrate(blankSeason('probe', 'Probe', '')),
   linkedFile: () => fileHandleName,
   installState: installState, applyAddbar: applyAddbar, toggleAddbar: toggleAddbar,
   openSheetDoc: openSheetDoc, validSheetDocUrl: validSheetDocUrl, _noteSheetDoc: noteSheetDoc,
+  _sheetsToWorkbook: sheetsToWorkbook,
   _setHandle: h => { fileHandle = h; fileHandleName = h ? h.name : ''; }
 };
 })();

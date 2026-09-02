@@ -8,4 +8,4 @@ phones and tablets can install it.
   apple-touch-icon.png     home-screen icon for iPhone and iPad
 
 Upload all of it, keeping the names. Then open the address on the device and
-add it to the home screen. Built 20260902-060827.
+add it to the home screen. Built 20260902-065833.

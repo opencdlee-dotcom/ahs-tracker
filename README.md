@@ -20,6 +20,15 @@ no signal.
 
 It then opens full screen with no browser bars, and works offline.
 
+## Tabs
+
+Columns are grouped into named tabs above the roster — Transportation,
+Equipment, whatever the season needs. `#`, Student, Gr and Level stay on
+screen in every tab, so a row is always identifiable. `All` is built in and
+always shows everything, and deleting a tab never deletes its columns. The
+arrangement travels with the spreadsheet, on a `Tabs` sheet written by column
+name.
+
 ## What is in here
 
 | file | what it is |
