@@ -64,6 +64,12 @@ body{
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:none;padding:0}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+/* "hidden" is only a USER-AGENT rule, so any author rule that sets display --
+   .field{display:flex}, .menu, .drawer, .modal -- silently outranks it and the
+   element stays on screen while el.hidden reads true. That trap had already
+   been patched one class at a time below; this closes it for every element,
+   including the next one someone adds. */
+[hidden]{display:none !important}
 
 /* ---------- app shell ---------- */
 #app{display:flex;flex-direction:column;height:100%}
@@ -656,6 +662,12 @@ th.c-cc,td.c-cc{width:120px;max-width:170px}
   display:flex;align-items:center;gap:10px;justify-content:space-between;
   padding:9px 2px 0;margin-top:4px;border-top:1px solid var(--border);
 }
+.newcol-note{
+  margin-top:8px;padding:9px 11px;border-radius:8px;
+  background:var(--surface-2);border:1px solid var(--border);
+  font-size:12.5px;color:var(--dim);line-height:1.5;
+}
+.newcol-note strong{color:var(--text)}
 .newcol{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 
 
@@ -4605,6 +4617,13 @@ function columnManagerBody(dest) {
       '<div class="field" id="ncOptsWrap" style="margin-top:8px">' +
         '<label for="ncOpts">Choices — separate with / or a comma</label>' +
         '<input id="ncOpts" value="Yes / No / Maybe" placeholder="Not started / Pending / Completed" spellcheck="false"></div>' +
+      // Free text has nothing to configure, and an option that simply empties
+      // the form reads as an option that does not work. Say what it does.
+      '<div class="newcol-note" id="ncTextNote" hidden>' +
+        '<strong>Nothing to set up.</strong> A free text column takes whatever you type — ' +
+        'words, numbers, “14B”. Add it, then type the values straight into the roster: ' +
+        'click a cell and go, and Enter drops you onto the next athlete.' +
+      '</div>' +
       '<div class="frow" style="margin-top:8px;align-items:center">' +
         '<button class="btn primary" data-act="addcol">Add column</button>' +
         '<span class="muted" style="flex:1 1 auto">Presets: ' +
@@ -5356,7 +5375,7 @@ document.addEventListener('click', e => {
     case 'addcol':   submitNewColumn(); break;
     case 'delcol':   removeCustomCol(el.dataset.c); break;
     case 'closecolmgr': { const a = saveColumnEdits(), b = saveColumnTabs(); if (a || b) renderAll(); closeModal(); break; }
-    case 'preset': { const t = $('#ncType'); if (t) t.value = 'choice'; const o = $('#ncOpts'); if (o) o.value = el.dataset.v; const w = $('#ncOptsWrap'); if (w) w.hidden = false; break; }
+    case 'preset': { const t = $('#ncType'); if (t) t.value = 'choice'; const o = $('#ncOpts'); if (o) o.value = el.dataset.v; const w = $('#ncOptsWrap'); if (w) w.hidden = false; const n = $('#ncTextNote'); if (n) n.hidden = true; break; }
     case 'movecol':  saveColumnEdits(); saveColumnTabs(); moveColumn(el.dataset.k, Number(el.dataset.dir)); openColumnManager(); break;
     case 'togglecol': saveColumnEdits(); saveColumnTabs(); toggleColumn(el.dataset.k); openColumnManager(); break;
     case 'resetcols': resetColumns(); openColumnManager(); break;
@@ -5743,8 +5762,10 @@ document.addEventListener('keydown', e => {
 /* drawer identity field edits */
 document.addEventListener('change', e => {
   if (e.target.id === 'ncType') {
-    const w = $('#ncOptsWrap');
-    if (w) w.hidden = (e.target.value === 'text');
+    const isText = e.target.value === 'text';
+    const w = $('#ncOptsWrap'), n = $('#ncTextNote');
+    if (w) w.hidden = isText;
+    if (n) n.hidden = !isText;
     return;
   }
   // A free-text cell in the roster itself. Saves on leaving the cell, so one
