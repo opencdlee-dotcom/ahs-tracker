@@ -4,12 +4,12 @@ Roster, attendance and evaluations for high-school athletics, as a single-page
 web app that installs to a phone or tablet home screen and keeps working with
 no signal.
 
-> The repository is still named `ahs-tryout-tracker`. That name is baked into
-> the address below, and GitHub Pages does not redirect a renamed repository —
-> changing it would break every link already shared and every copy already
-> installed on someone's home screen. The app is what got renamed.
+> The address changed on 2 September 2026, when the repository was renamed from
+> `ahs-tryout-tracker` to `ahs-tracker`. GitHub Pages does not redirect a renamed
+> repository, so the old link now returns 404 — anyone holding it needs the new
+> one, and a copy already added to a home screen has to be removed and re-added.
 
-**Open it:** https://opencdlee-dotcom.github.io/ahs-tryout-tracker/
+**Open it:** https://opencdlee-dotcom.github.io/ahs-tracker/
 
 ## Putting it on a phone
 
