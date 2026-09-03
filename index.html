@@ -729,7 +729,16 @@ th.drop-after{box-shadow:inset -3px 0 0 var(--accent)}
 
 
 /* ---------- filter inside the column menu ---------- */
+/* A floating menu is positioned by placePopup(), which shrinks its value list
+   to fit the screen. These are the belt-and-braces: even if the measurement is
+   off, the menu can never be taller than the screen and never unscrollable, so
+   nothing inside it can end up unreachable. */
 .menu.colmenu{min-width:210px}
+#rowMenuPop{
+  max-height:calc(100dvh - 16px);
+  overflow-y:auto;
+  overscroll-behavior:contain;      /* scrolling the menu must not drag the roster */
+}
 .colfilter-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .menu .colfilter-head .btn.tiny{
   width:auto;display:inline-flex;flex:none;
@@ -2040,9 +2049,45 @@ function columnMenu(key, anchorEl) {
   pop.dataset.k = key;
   pop.innerHTML = columnMenuHTML(col, pinned);
   document.body.appendChild(pop);
+  placePopup(pop, anchorEl);
+}
+
+/* Puts a floating menu on the screen and KEEPS it on the screen.
+
+   The old line read "top = min(below the button, viewportHeight - menuHeight - 8)",
+   which goes NEGATIVE the moment the menu is taller than the screen — so on a
+   phone or a tablet the menu was pinned above the top edge and its first items,
+   the column name and both Sort rows and the top of the value list, were simply
+   off-screen with no way to reach them.
+
+   Two things fix it. The value list is allowed to shrink so the whole menu fits
+   in the space available, and the final position is clamped to the viewport
+   instead of being allowed to run off the top. If the list still cannot fit
+   (a very short screen), the menu's own overflow takes over, so the worst case
+   is a scroll rather than something unreachable. */
+function placePopup(pop, anchorEl) {
+  const M = 8;                                   // breathing room at the edges
+  const vw = window.innerWidth, vh = window.innerHeight;
   const r = anchorEl.getBoundingClientRect();
-  pop.style.top = Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8) + 'px';
-  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+
+  const list = pop.querySelector('.colfilter');
+  if (list) list.style.maxHeight = '';           // measure it at its full height
+  const below = vh - r.bottom - M * 2;
+  const above = r.top - M * 2;
+  const room = Math.max(below, above, 120);
+
+  if (list && pop.offsetHeight > room) {
+    // Everything that is not the list — the name, the sort rows, the move and
+    // tab sections — keeps its height; the list gives up the difference.
+    const others = pop.offsetHeight - list.offsetHeight;
+    list.style.maxHeight = Math.max(88, room - others) + 'px';
+  }
+
+  const h = pop.offsetHeight;
+  // Prefer under the button, flip above only when that is genuinely roomier.
+  const top = (below < h && above > below) ? r.top - h - 4 : r.bottom + 4;
+  pop.style.top = Math.max(M, Math.min(top, vh - h - M)) + 'px';
+  pop.style.left = Math.max(M, Math.min(r.left, vw - pop.offsetWidth - M)) + 'px';
 }
 
 function columnMenuHTML(col, pinned) {
@@ -2698,9 +2743,7 @@ function tabMenu(id, anchorEl) {
     '<button data-act="tabrename" data-t="' + esc(id) + '">Rename…</button>' +
     '<button data-act="tabdel" data-t="' + esc(id) + '">Delete this tab</button>';
   document.body.appendChild(pop);
-  const r = anchorEl.getBoundingClientRect();
-  pop.style.top = Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8) + 'px';
-  pop.style.left = Math.max(8, Math.min(r.left - 8, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+  placePopup(pop, anchorEl);
 }
 
 function pickTab(id) {
@@ -5646,9 +5689,7 @@ function rowMenu(p, anchor) {
     '<button data-act="togglearchive2" data-p="' + p.id + '">' + (p.archived ? 'Restore to roster' : 'Archive') + '</button>' +
     '<div class="sep"></div><button data-act="delplayer2" data-p="' + p.id + '">Delete permanently</button>';
   document.body.appendChild(pop);
-  const r = anchor.getBoundingClientRect();
-  pop.style.top = Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8) + 'px';
-  pop.style.left = Math.max(8, r.right - pop.offsetWidth) + 'px';
+  placePopup(pop, anchor);
 }
 
 /* ================================================================ EVENTS */
