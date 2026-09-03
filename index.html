@@ -336,14 +336,13 @@ thead th.sortable{cursor:pointer;user-select:none;-webkit-user-select:none}
 thead th.sortable:hover{background:var(--surface-3);color:var(--text)}
 .th-in{display:inline-flex;align-items:center;gap:5px;max-width:100%;vertical-align:middle}
 .th-lbl{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.th-ar{flex:none;width:9px;font-size:9px;line-height:1;opacity:0;transition:opacity .12s}
-thead th.sortable:hover .th-ar{opacity:.45}
+/* The sort caret is gone: the single menu arrow shows the sort state itself. */
 thead th.sorted{
   color:var(--accent);
   background:color-mix(in srgb,var(--accent) 10%,var(--surface-2));
   box-shadow:inset 0 -2px 0 var(--accent);
 }
-thead th.sorted .th-ar{opacity:1}
+
 thead th.sorted:hover{background:color-mix(in srgb,var(--accent) 16%,var(--surface-2))}
 thead th.sorted .dsub{color:var(--accent);opacity:.75}
 /* The navy accent reads well as a fill but is too dark to carry meaning as
@@ -706,13 +705,22 @@ th.c-cc,td.c-cc{width:120px;max-width:170px}
    Sticky is also a containing block for absolute children, so the menu button
    and drag affordances that wanted "relative" are unaffected. */
 th.sortable{position:sticky}
+/* One control per heading, and it is ALWAYS visible - it is the only way in to
+   sort and filter, so hiding it until hover meant a tablet or phone showed no
+   affordance at all. Same arrow, same place, every platform. */
 .th-menu{
-  width:18px;height:18px;margin-left:2px;border-radius:4px;
-  color:var(--faint);font-size:11px;line-height:1;
-  opacity:0;transition:opacity .12s;flex:none;
+  width:20px;height:20px;margin-left:2px;border-radius:4px;flex:none;
+  color:var(--dim);font-size:10px;line-height:1;position:relative;
+  display:inline-flex;align-items:center;justify-content:center;
 }
-th:hover .th-menu,.th-menu:focus-visible{opacity:1}
 .th-menu:hover{background:var(--surface-3);color:var(--text)}
+.th-menu.sorted{color:var(--accent)}
+/* A dot on the arrow says this column is filtered, so sort state and filter
+   state can both be read off the one control. */
+.th-fdot{
+  position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;
+  background:var(--accent);
+}
 th.movable{cursor:grab}
 th.movable:active{cursor:grabbing}
 th.dragging{opacity:.4}
@@ -738,7 +746,15 @@ th.drop-after{box-shadow:inset -3px 0 0 var(--accent)}
 .colfilter-row.on{color:var(--accent);font-weight:600}
 .colfilter-row.empty{opacity:.5}
 th.filtered .th-lbl{color:var(--accent)}
-.th-menu.on{opacity:1;color:var(--accent);font-size:9px}
+.th-menu.on{color:var(--accent)}
+/* find-a-value box, for columns with more values than fit in a glance */
+.colfilter-find{padding:4px 6px 2px}
+.colfilter-search{
+  width:100%;height:30px;padding:0 9px;
+  border:1px solid var(--border-strong);border-radius:7px;background:var(--surface);font-size:13px;
+}
+.colfilter-search:focus{outline:none;border-color:var(--accent)}
+.colfilter-none{padding:10px;font-size:13px;color:var(--faint)}
 
 /* ---------- view / group panel ---------- */
 .addcol-btn.on{
@@ -841,9 +857,11 @@ th.filtered .th-lbl{color:var(--accent)}
    Everything hover reveals is made permanent here, and every target a finger
    has to hit is grown to something a finger can hit. */
 @media (hover: none){
-  .th-menu{opacity:1;width:26px;height:26px;font-size:13px;color:var(--dim)}
-  .th-menu:hover{background:none;color:var(--dim)}
-  .th-menu.on{color:var(--accent)}
+  /* Size only. Setting a colour here would outrank .th-menu.sorted / .on
+     further up (same specificity, later in the file) and grey out the very
+     state the arrow exists to show - on touch devices specifically. */
+  .th-menu{width:26px;height:26px;font-size:13px}
+  .th-menu:hover{background:none}
   th.movable{cursor:default}                 /* dragging a header needs a mouse */
   .menu button,.menu .mi{padding:11px 12px}
   .colfilter-row{padding:11px 8px;font-size:15px}
@@ -904,7 +922,7 @@ th.filtered .th-lbl{color:var(--accent)}
 @media print{
   body{overflow:visible;background:#fff;color:#000;font-size:11px}
   .topbar,.stats,.toolbar,.tabbar,.addbar,.drawer,.scrim,.modal,#toasts,.c-mn,.c-nt,.c-fill,.c-email,.c-phone,.rowmenu,
-  .th-menu,.th-ar{display:none !important}
+  .th-menu{display:none !important}
   #app{display:block;height:auto}
   .tablewrap{overflow:visible;background:#fff}
   table{min-width:0;width:100%}
@@ -1181,6 +1199,10 @@ let S = null;        // active season object
 let undoStack = [], redoStack = [];
 let lastSnapAt = 0;
 let filter = 'all', query = '', activeDay = null, activeTab = 'all';
+/* Text typed into a column's "Find a value" box. Lives outside the state on
+   purpose: it is a way of looking through a long list, not a filter, and it
+   should be gone the next time that menu is opened. */
+let colFilterQuery = '';
 
 function blankSeason(id, label, source) {
   return {
@@ -1360,65 +1382,106 @@ function afterTimeTravel(msg) {
 function byId(id) { return S.players.find(p => p.id === id); }
 function nextPlayerId() { return S.players.reduce((m, p) => Math.max(m, Number(p.id) || 0), 0) + 1; }
 
-/* ------------------------------------------------------------ group filters
+/* ------------------------------------------------------------ value filters
    "Show me only the JV kids who still owe paperwork" is a checkbox question,
-   not a search. Each groupable column contributes a list of its values; a
-   value that is unticked hides the athletes holding it. Exclusions are stored
-   rather than inclusions, so a value that appears later starts out visible. */
+   not a search. Every column offers the list of values actually present in it,
+   and unticking a value hides the athletes holding it — the same multi-select a
+   spreadsheet gives you under a column heading.
 
-function groupDefs() {
-  const defs = [];
-  defs.push({
-    key: 'clear', label: 'Clearance',
-    values: CL_CYCLE.map(v => ({ v: v, label: CL_LABEL[v] })),
-    valueOf: p => p.clearance
-  });
-  defs.push({
-    key: 'returning', label: 'Returning',
-    values: [{ v: 'yes', label: 'Returning' }, { v: 'no', label: 'New' }],
-    valueOf: p => (p.returning ? 'yes' : 'no')
-  });
+   EVERY column. The previous version built lists only for clearance,
+   returning, grade, the day columns and choice columns, which is why the
+   filter appeared under some headings and not others. Curated wording and
+   order are kept where they matter (Cleared/Pending/Missing reads better than
+   yes/pending/no, and attendance belongs in P/L/A/E order); everything else is
+   derived from the roster. */
 
-  const grades = [];
-  active().forEach(p => {
-    const g = String(p.grade == null ? '' : p.grade).trim();
-    const k = g || '—';
-    if (grades.indexOf(k) < 0) grades.push(k);
-  });
-  grades.sort((a, b) => (Number(a) || 99) - (Number(b) || 99));
-  if (grades.length > 1) {
-    defs.push({
-      key: 'grade', label: 'Grade',
-      values: grades.map(g => ({ v: g, label: g === '—' ? 'No grade' : 'Grade ' + g })),
-      valueOf: p => String(p.grade == null ? '' : p.grade).trim() || '—'
+const NO_FILTER_KEYS = ['id'];       // the sheet-order number: unique per row
+
+/** The single value a column filters on, for one athlete. */
+function filterValueOf(p, key) {
+  if (key === 'name')      return p.name || '—';
+  if (key === 'grade')     return String(p.grade == null ? '' : p.grade).trim() || '—';
+  if (key === 'clear')     return p.clearance;
+  if (key === 'returning') return p.returning ? 'yes' : 'no';
+  if (key === 'notes')     return String(p.evals.length);
+  if (key === 'email')     return p.email || '—';
+  if (key === 'phone')     return p.phone || '—';
+  if (key.indexOf('day:') === 0) return p.attendance[key.slice(4)] || '—';
+  if (key.indexOf('cc:') === 0)  return customValue(p, key.slice(3)) || '—';
+  return '—';
+}
+
+function blankLabel(key, v) {
+  if (v === '—') return key === 'grade' ? 'No grade' : 'Blank';
+  if (key === 'notes') return v === '0' ? 'No notes' : (v === '1' ? '1 note' : v + ' notes');
+  return v;
+}
+
+/** The value list for one column: curated where it matters, derived otherwise. */
+function buildFilterDef(col) {
+  const key = col.key;
+  const label = col.plain || (col.label === '#' ? '#' : String(col.label));
+  const valueOf = p => filterValueOf(p, key);
+
+  if (key === 'clear') {
+    return { key: key, label: label, valueOf: valueOf,
+             values: CL_CYCLE.map(v => ({ v: v, label: CL_LABEL[v] })) };
+  }
+  if (key === 'returning') {
+    return { key: key, label: label, valueOf: valueOf,
+             values: [{ v: 'yes', label: 'Returning' }, { v: 'no', label: 'New' }] };
+  }
+  if (key.indexOf('day:') === 0) {
+    return { key: key, label: label, valueOf: valueOf,
+             values: [{ v: 'P', label: 'Present' }, { v: 'L', label: 'Late' },
+                      { v: 'A', label: 'Absent' }, { v: 'E', label: 'Excused' },
+                      { v: '—', label: 'Not marked' }] };
+  }
+  const cc = key.indexOf('cc:') === 0 ? customCol(key.slice(3)) : null;
+  if (cc && cc.type === 'choice') {
+    // The coach's own order first, then anything typed straight into the sheet.
+    const seen = (cc.options || []).map(o => o.value);
+    active().forEach(p => {
+      const v = customValue(p, cc.id);
+      if (v && seen.indexOf(v) < 0) seen.push(v);
     });
+    return { key: key, label: label, valueOf: valueOf,
+             values: seen.map(v => ({ v: v, label: v })).concat([{ v: '—', label: 'Not set' }]) };
   }
 
-  // One filter per day column, keyed to that column so it can be reached from
-  // the column's own menu rather than only from the overall View panel.
-  S.days.forEach(d => {
-    defs.push({
-      key: 'day:' + d.id, label: d.label,
-      values: [{ v: 'P', label: 'Present' }, { v: 'L', label: 'Late' },
-               { v: 'A', label: 'Absent' }, { v: 'E', label: 'Excused' },
-               { v: '—', label: 'Not marked' }],
-      valueOf: p => p.attendance[d.id] || '—'
-    });
+  // Derived: whatever is actually in the column, blanks last.
+  const seen = [];
+  active().forEach(p => {
+    const v = String(valueOf(p));
+    if (seen.indexOf(v) < 0) seen.push(v);
   });
+  const numeric = seen.every(v => v === '—' || !isNaN(Number(v)));
+  seen.sort((a, b) => {
+    if (a === '—') return 1;
+    if (b === '—') return -1;
+    return numeric ? Number(a) - Number(b) : String(a).localeCompare(String(b));
+  });
+  return { key: key, label: label, valueOf: valueOf,
+           values: seen.map(v => ({ v: v, label: blankLabel(key, v) })) };
+}
 
-  (S.customCols || []).filter(c => c.type === 'choice').forEach(c => {
-    const seen = (c.options || []).map(o => o.value);
-    active().forEach(p => {
-      const v = customValue(p, c.id);
-      if (v && seen.indexOf(v) < 0) seen.push(v);          // values typed in the sheet
-    });
-    defs.push({
-      key: 'cc:' + c.id, label: c.label,
-      values: seen.map(v => ({ v: v, label: v })).concat([{ v: '—', label: 'Not set' }]),
-      valueOf: p => customValue(p, c.id) || '—'
-    });
-  });
-  return defs;
+/** Every column that can be filtered, in the order they sit on screen. */
+function filterDefs() {
+  return orderedColumns()
+    .filter(c => NO_FILTER_KEYS.indexOf(c.key) < 0)
+    .map(buildFilterDef);
+}
+
+/* Only the columns that actually have something ticked. filtered() runs on
+   every render, and building value lists for every column each time would mean
+   scanning the whole roster once per column for no reason. */
+function activeFilterDefs() {
+  const pk = (S.view && S.view.pick) || {};
+  const keys = Object.keys(pk).filter(k => Object.keys(pk[k] || {}).length);
+  if (!keys.length) return [];
+  const byKey = {};
+  orderedColumns().forEach(c => { byKey[c.key] = c; });
+  return keys.map(k => buildFilterDef(byKey[k] || { key: k, label: k }));
 }
 
 /* A group with nothing ticked imposes no filter; tick "Varsity" and only the
@@ -1476,6 +1539,28 @@ function toggleGroupValue(groupKey, value) {
 function clearGroup(groupKey) {
   commit('view groups', () => {
     if (S.view && S.view.pick) delete S.view.pick[groupKey];
+  });
+  renderAll();
+}
+
+/* "Select all" ticks every value rather than clearing the filter. Both end up
+   showing everybody, but they are not the same thing: no ticks at all means the
+   column imposes nothing, while an explicit full set is something you can then
+   untick two values from — which is how anyone who has used a spreadsheet
+   filter expects to work. With a search typed in, it ticks what is on screen. */
+function pickAllInColumn(groupKey) {
+  const col = orderedColumns().find(c => c.key === groupKey);
+  if (!col) return;
+  const def = buildFilterDef(col);
+  const q = norm(colFilterQuery);
+  const vals = (q ? def.values.filter(x => norm(x.label).indexOf(q) >= 0) : def.values)
+                 .map(x => String(x.v));
+  if (!vals.length) return;
+  commit('view groups', () => {
+    S.view = S.view || {};
+    S.view.pick = S.view.pick || {};
+    const g = S.view.pick[groupKey] = S.view.pick[groupKey] || {};
+    vals.forEach(v => { g[v] = true; });
   });
   renderAll();
 }
@@ -1887,7 +1972,7 @@ function filtered() {
   else if (filter === 'absent') ps = ps.filter(p => activeDay && p.attendance[activeDay] === 'A');
   else if (filter === 'returning') ps = ps.filter(p => p.returning);
   else if (filter === 'notes') ps = ps.filter(p => p.evals.length);
-  const gdefs = groupDefs();
+  const gdefs = activeFilterDefs();   // only the columns with something ticked
   if (anyGroupFilter()) ps = ps.filter(p => passesGroups(p, gdefs));
   if (query) {
     const q = norm(query);
@@ -1904,6 +1989,13 @@ function filtered() {
    caret span is emitted whether or not this column is the active sort, so
    the column's width is identical in every state and the label can never
    be squeezed out by the indicator appearing. */
+/** The heading's plain words, for a screen reader and for tooltips. */
+function plainOf(key, label) {
+  const c = orderedColumns().find(x => x.key === key);
+  if (c) return c.plain || (c.label === '#' ? 'number' : String(c.label));
+  return String(label).replace(/<[^>]*>/g, '');
+}
+
 function thHTML(key, label, cls, title, sub) {
   const filtered = groupPicks(key).length > 0;
   const on = S.sort.key === key;
@@ -1914,8 +2006,21 @@ function thHTML(key, label, cls, title, sub) {
     ' data-act="sort" data-k="' + esc(key) + '" aria-sort="' + dir + '"' +
     ' title="' + esc(title) + (pinned ? '' : ' · drag to reorder') + '">' +
     '<span class="th-in"><span class="th-lbl">' + label + '</span>' +
-    '<span class="th-ar">' + (on && S.sort.dir < 0 ? '▼' : '▲') + '</span>' +
-    '<button class="th-menu' + (filtered ? ' on' : '') + '" data-act="colmenu" data-k="' + esc(key) + '" title="' + (filtered ? 'Filtered — ' + groupPicks(key).join(', ') : 'Sort, filter or hide this column') + '" aria-label="Column options">' + (filtered ? '▼' : '⌄') + '</button>' +
+    /* ONE arrow per heading, the way a spreadsheet does it. There used to be
+       two: a sort caret AND a menu chevron, which read as two controls doing
+       unrelated jobs — and the menu only offered a value list on some columns,
+       so the pair was inconsistent as well as confusing. The single arrow now
+       shows the state (up/down when this column is the sorted one) and opens
+       one menu holding sort, the value filter, and the rest. */
+    '<button class="th-menu' + (on ? ' sorted' : '') + (filtered ? ' on' : '') +
+      '" data-act="colmenu" data-k="' + esc(key) + '"' +
+      ' title="' + (filtered ? 'Filtered to ' + esc(groupPicks(key).join(', ')) + ' — click to change'
+                             : 'Sort, filter or hide this column') + '"' +
+      ' aria-label="Sort and filter ' + esc(plainOf(key, label)) + '"' +
+      ' aria-haspopup="true">' +
+      (on ? (S.sort.dir < 0 ? '▼' : '▲') : '▾') +
+      (filtered ? '<span class="th-fdot" aria-hidden="true"></span>' : '') +
+    '</button>' +
     '</span>' + (sub || '') + '</th>';
 }
 
@@ -1924,6 +2029,7 @@ function columnMenu(key, anchorEl) {
   closeMenus();
   const col = orderedColumns().find(c => c.key === key);
   if (!col) return;
+  colFilterQuery = '';          // a fresh menu starts with the whole list
   const pinned = col.anchor || col.key === 'id';
   const pop = document.createElement('div');
   pop.className = 'menu colmenu';
@@ -1941,31 +2047,45 @@ function columnMenu(key, anchorEl) {
 
 function columnMenuHTML(col, pinned) {
   const key = col.key;
-  const def = groupDefs().find(d => d.key === key);
+  const def = NO_FILTER_KEYS.indexOf(key) < 0 ? buildFilterDef(col) : null;
   let filterPart = '';
 
   if (def) {
     // Counts are taken against what the other columns already allow, so the
     // number beside a value is what ticking it would actually leave on screen.
-    const defs = groupDefs();
-    const pool = active().filter(p => passesGroups(p, defs, key));
+    const pool = active().filter(p => passesGroups(p, activeFilterDefs(), key));
     const counts = {};
     pool.forEach(p => { const v = String(def.valueOf(p)); counts[v] = (counts[v] || 0) + 1; });
     const picks = groupPicks(key);
+
+    /* A name or an email column has as many values as there are athletes, so a
+       long list gets a search box — otherwise "filter by value" is unusable on
+       exactly the columns where you most want to pick one person out. */
+    const q = norm(colFilterQuery);
+    const shown = q ? def.values.filter(x => norm(x.label).indexOf(q) >= 0) : def.values;
+    const searchable = def.values.length > 8;
+
     filterPart =
       '<div class="sep"></div>' +
       '<div class="mlabel colfilter-head">Show' +
-        (picks.length ? '<button class="btn tiny" data-act="grpclearcol" data-g="' + esc(key) + '">Any</button>' : '') +
+        '<button class="btn tiny" data-act="grpallcol" data-g="' + esc(key) + '">Select all</button>' +
+        (picks.length ? '<button class="btn tiny" data-act="grpclearcol" data-g="' + esc(key) + '">Clear</button>' : '') +
       '</div>' +
+      (searchable
+        ? '<div class="colfilter-find"><input type="search" class="colfilter-search" ' +
+          'placeholder="Find a value…" value="' + esc(colFilterQuery) + '" ' +
+          'aria-label="Find a value in ' + esc(def.label) + '" spellcheck="false"></div>'
+        : '') +
       '<div class="colfilter">' +
-        def.values.map(x => {
+        (shown.length ? shown.map(x => {
           const n = counts[String(x.v)] || 0;
           const on = picked(key, String(x.v));
           return '<label class="colfilter-row' + (on ? ' on' : '') + (n ? '' : ' empty') + '">' +
             '<input type="checkbox" data-act="grpvalcol" data-g="' + esc(key) + '" data-v="' + esc(x.v) + '"' +
             (on ? ' checked' : '') + '>' +
             '<span>' + esc(x.label) + '</span><span class="grp-n">' + n + '</span></label>';
-        }).join('') +
+        }).join('')
+        : '<div class="colfilter-none">Nothing matches “' + esc(colFilterQuery) + '”</div>') +
       '</div>';
   }
 
@@ -2004,9 +2124,17 @@ function refreshColumnMenu(key) {
   if (!col) return;
   const box = pop.querySelector('.colfilter');
   const top = box ? box.scrollTop : 0;
+  // Re-rendering destroys the search box, so note whether the cursor was in it
+  // and put it back - otherwise the second character you type goes nowhere.
+  const find = pop.querySelector('.colfilter-search');
+  const hadFocus = !!find && document.activeElement === find;
   pop.innerHTML = columnMenuHTML(col, col.anchor || col.key === 'id');
   const again = pop.querySelector('.colfilter');
   if (again) again.scrollTop = top;
+  if (hadFocus) {
+    const back = pop.querySelector('.colfilter-search');
+    if (back) { back.focus(); back.setSelectionRange(back.value.length, back.value.length); }
+  }
 }
 
 function renderTable() {
@@ -4658,7 +4786,7 @@ function removeDay(id, after) {
 
 /* ------------------------------------------------------------ view panel */
 function viewPanelBody() {
-  const defs = groupDefs();
+  const defs = filterDefs();
   const ps = active();
   return defs.map(d => {
     // Count against the athletes the OTHER groups already allow, so the number
@@ -5551,6 +5679,7 @@ document.addEventListener('click', e => {
     case 'grpclear': clearGroup(el.dataset.g); refreshViewPanel(); return;
     case 'grpvalcol': toggleGroupValue(el.dataset.g, el.dataset.v); refreshColumnMenu(el.dataset.g); return;
     case 'grpclearcol': clearGroup(el.dataset.g); refreshColumnMenu(el.dataset.g); return;
+    case 'grpallcol': pickAllInColumn(el.dataset.g); refreshColumnMenu(el.dataset.g); return;
     case 'clrgroups': clearGroupFilters(); refreshViewPanel(); return;
     case 'addcol':   submitNewColumn(); break;
     case 'delcol':   removeCustomCol(el.dataset.c); break;
@@ -5911,6 +6040,17 @@ $('#searchClear').addEventListener('click', () => {
 $('#scrim').addEventListener('click', () => { if (!$('#modal').hidden) closeModal(); else closeDrawer(); });
 
 /* keyboard + delegated field edits */
+/* The "find a value" box inside a column menu. Bound at the document, because
+   the menu is thrown away and rebuilt on every tick and any listener attached
+   to the input itself would go with it. */
+document.addEventListener('input', e => {
+  if (!e.target.classList || !e.target.classList.contains('colfilter-search')) return;
+  const pop = e.target.closest('#rowMenuPop');
+  if (!pop) return;
+  colFilterQuery = e.target.value;
+  refreshColumnMenu(pop.dataset.k);
+});
+
 document.addEventListener('keydown', e => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
 
