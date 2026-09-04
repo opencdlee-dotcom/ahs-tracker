@@ -170,15 +170,26 @@ button{cursor:pointer;background:none;border:none;padding:0}
   border:1px solid var(--border);background:var(--surface-2);text-align:left;
   white-space:nowrap;
 }
-.stat:hover{border-color:var(--border-strong)}
+.stat:hover{border-color:var(--border-strong);background:linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%)}
 .stat .n{display:block;font-size:21px;font-weight:700;line-height:1.15;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .stat .l{display:block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin-top:1px;white-space:nowrap}
 .stat.alert{background:var(--warn-bg);border-color:var(--warn-br)}
 .stat.alert .n,.stat.alert .l{color:var(--warn)}
 .stat.good .n{color:var(--ok)}
-/* A squad card that is currently filtering the roster reads as pressed. */
-.stat.on{background:var(--accent);border-color:var(--accent)}
-.stat.on .n,.stat.on .l{color:var(--accent-ink)}
+/* A squad card that is currently filtering the roster reads as pressed WITHOUT
+   a solid fill. A block of accent blue behind a 21px number left the count hard
+   to read - white on dark blue, at a glance, on a field, in sun. It is a soft
+   grey gradient with an accent bar underneath instead: the count keeps the same
+   ink it has on every other card, and "pressed" is still unmistakable. */
+.stat.on{
+  background:linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%);
+  border-color:var(--border-strong);
+  box-shadow:inset 0 -3px 0 var(--accent);
+}
+/* Deliberately no colour override here. Pressing a card must not change the
+   ink of its number - the per-level tone (green, amber, ...) stays exactly as
+   it reads unpressed, which is legible on this grey. The old rule tried to
+   force white-on-accent and lost to the tone rules below anyway. */
 .stat.tone-ok .n{color:var(--ok)}
 .stat.tone-warn .n{color:var(--warn)}
 .stat.tone-bad .n{color:var(--bad)}
@@ -1834,6 +1845,9 @@ function renderSaveChip() {
 }
 
 /** The Level column, if the coach still has one. Named, not positional. */
+/** A level a coach has named "Not selected" - the pile that did not make a squad. */
+const NOT_SEL_RE = /^not\s*selected$/i;
+
 function levelCol() {
   return (S.customCols || []).find(c => LEVEL_RE.test(String(c.label || '').trim())) || null;
 }
@@ -1871,7 +1885,14 @@ function renderStats() {
       cards.push({ n: counts[v] || 0, l: v, act: 'statlvl', g: key, v: v,
                    cls: 'tone-' + optionTone(v, i), on: picked(key, v) });
     });
-    cards.push({ n: counts['—'] || 0, l: 'Not selected', act: 'statlvl', g: key, v: '—',
+    /* The blank card. If the coach already HAS a level called "Not selected" -
+       which is the sensible thing to call the pile that did not make a squad -
+       then two cards would carry the same words while counting different
+       things. The blank one takes the narrower name in that case, so the count
+       a coach reads under "Not selected" is the one they actually meant. */
+    const namedNotSel = opts.some(v => NOT_SEL_RE.test(v));
+    cards.push({ n: counts['—'] || 0, l: namedNotSel ? 'No level set' : 'Not selected',
+                 act: 'statlvl', g: key, v: '—',
                  cls: (counts['—'] ? 'alert' : ''), on: picked(key, '—') });
   } else {
     // No Level column: say so, and make the card the way to add one.
@@ -2631,7 +2652,10 @@ function seedLevelColumn(s) {
   const found = (s.customCols || []).find(c => LEVEL_RE.test(String(c.label || '').trim()));
   const col = found || {
     id: 'c' + uid(), label: 'Level', type: 'choice',
-    options: parseOptionList('Varsity / JV / Frosh-Soph')
+    // "Not selected" is a level like any other, so a coach can place an athlete
+    // there deliberately rather than leaving the cell blank and hoping someone
+    // works out which of the two it meant.
+    options: parseOptionList('Varsity / JV / Frosh-Soph / Not selected')
   };
   if (!found) s.customCols.push(col);
   if (s.view.core.indexOf('cc:' + col.id) < 0) s.view.core.push('cc:' + col.id);
@@ -5141,7 +5165,12 @@ function saveColumnEdits() {
     const parsed = parseOptionList(el.value);
     const same = parsed.length === (c.options || []).length &&
                  parsed.every((o, i) => o.value === c.options[i].value);
-    if (!same) { next[c.id] = next[c.id] || {}; next[c.id].options = parsed; touched = true; }
+    if (!same) {
+      next[c.id] = next[c.id] || {};
+      next[c.id].options = parsed;
+      next[c.id].before = (c.options || []).map(o => o.value);   // for the rename below
+      touched = true;
+    }
   });
   if (!touched) return false;
   commit('edit columns', () => {
@@ -5149,10 +5178,47 @@ function saveColumnEdits() {
       const c = customCol(id);
       if (!c) return;
       if (next[id].label) c.label = next[id].label;
-      if (next[id].options) c.options = next[id].options;
+      if (next[id].options) {
+        const pairs = renamedOptions(next[id].before, next[id].options.map(o => o.value));
+        c.options = next[id].options;
+        // Carry the athletes across with the word.
+        pairs.forEach(pr => {
+          S.players.forEach(p => {
+            if (p.custom && p.custom[id] === pr[0]) p.custom[id] = pr[1];
+          });
+        });
+        // A value that is picked in a filter is renamed with everything else,
+        // or the filter would quietly start matching nobody.
+        const key = 'cc:' + id;
+        const pk = S.view && S.view.pick && S.view.pick[key];
+        if (pk) pairs.forEach(pr => { if (pk[pr[0]]) { delete pk[pr[0]]; pk[pr[1]] = true; } });
+      }
     });
   });
   return true;
+}
+
+/* Which choices were RENAMED, as [old, new] pairs.
+
+   Renaming one used to orphan every value already recorded under the old word:
+   the athletes kept "Cut", the column stopped offering it, and the roster grew
+   a ghost card for a value nobody could pick again while the new card sat at
+   zero. Only a true rename is migrated - a slot that lost a word and gained a
+   different one in the same position. Adding or removing a choice is left
+   alone, because those are not renames and guessing would move athletes a coach
+   never asked to move. */
+function renamedOptions(before, after) {
+  before = before || []; after = after || [];
+  if (before.length !== after.length) return [];
+  const pairs = [];
+  for (let i = 0; i < before.length; i++) {
+    const was = before[i], now = after[i];
+    if (was === now) continue;
+    // Both sides must be unique to this edit, or it is a reorder, not a rename.
+    if (after.indexOf(was) >= 0 || before.indexOf(now) >= 0) return [];
+    pairs.push([was, now]);
+  }
+  return pairs;
 }
 
 /* ================================================================= MODAL */
