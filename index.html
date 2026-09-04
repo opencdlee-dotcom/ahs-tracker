@@ -176,6 +176,14 @@ button{cursor:pointer;background:none;border:none;padding:0}
 .stat.alert{background:var(--warn-bg);border-color:var(--warn-br)}
 .stat.alert .n,.stat.alert .l{color:var(--warn)}
 .stat.good .n{color:var(--ok)}
+/* A squad card that is currently filtering the roster reads as pressed. */
+.stat.on{background:var(--accent);border-color:var(--accent)}
+.stat.on .n,.stat.on .l{color:var(--accent-ink)}
+.stat.tone-ok .n{color:var(--ok)}
+.stat.tone-warn .n{color:var(--warn)}
+.stat.tone-bad .n{color:var(--bad)}
+.stat.tone-info .n{color:var(--info)}
+.stat.tone-accent .n{color:var(--accent)}
 
 /* ---------- toolbar ---------- */
 .toolbar{
@@ -982,7 +990,6 @@ th.filtered .th-lbl{color:var(--accent)}
       <div class="menu" id="coachMenu" hidden></div>
     </div>
 
-    <span class="chip" id="saveChip" title="Where your data lives"><span class="dot"></span><span id="saveChipText">Saved</span></span>
 
     <button class="chip target" id="saveTarget" title="Where Save writes">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 012-2h8l6 6v10a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M14 3v6h6"/></svg>
@@ -991,10 +998,6 @@ th.filtered .th-lbl{color:var(--accent)}
 
     <button class="chip sync" id="syncChip" hidden title="The shared Google Sheet"><span class="dot"></span><span id="syncChipText">Sheet</span></button>
 
-    <button class="btn" id="refreshBtn" title="Re-read the spreadsheet from disk (Ctrl+R)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
-      <span class="btn-tx">Refresh</span>
-    </button>
 
     <div class="menu-wrap">
       <button class="btn" id="openBtn" title="Open a spreadsheet, or the Google Sheet">
@@ -1212,6 +1215,7 @@ let filter = 'all', query = '', activeDay = null, activeTab = 'all';
    purpose: it is a way of looking through a long list, not a filter, and it
    should be gone the next time that menu is opened. */
 let colFilterQuery = '';
+let storageWarned = false;   // the blocked-storage warning is said once, not every render
 
 function blankSeason(id, label, source) {
   return {
@@ -1798,6 +1802,18 @@ function renderSaveChip() {
     }
   }
 
+  /* The running "N changes to save" chip was removed from the top bar: it is a
+     number nobody acts on, and the Save button already names where the work is
+     going. Storage being BLOCKED is different - that is the one case where the
+     work really can be lost - so it still speaks up, loudly, as a toast. */
+  if (!chip) {
+    if (!storageOK && !storageWarned) {
+      storageWarned = true;
+      toast('This browser is blocking local storage — save often, nothing is being kept here', 12000);
+    }
+    return;
+  }
+
   if (!storageOK) {
     chip.className = 'chip dirty';
     t.textContent = 'Not saving — export often!';
@@ -1817,21 +1833,52 @@ function renderSaveChip() {
   }
 }
 
+/** The Level column, if the coach still has one. Named, not positional. */
+function levelCol() {
+  return (S.customCols || []).find(c => LEVEL_RE.test(String(c.label || '').trim())) || null;
+}
+
+/* The strip across the top counts the squad, because that is the question a
+   coach is actually holding in their head: how many are varsity, how many JV,
+   how many have not been placed yet. It used to show cleared / need clearance /
+   here-today, which are all reachable from the filter chips and the day tabs
+   right below it, so the strip was spending its space saying things twice.
+
+   The cards come from the Level column's OWN choices rather than a hard-coded
+   Varsity/JV/Frosh-Soph, so renaming a level or adding "Cut" is reflected here
+   without touching this code. Clicking one filters the roster to it — the same
+   tick as the column's own menu, so the two can never disagree. */
 function renderStats() {
   const ps = active();
-  const cleared = ps.filter(p => p.clearance === 'yes').length;
-  const needs   = ps.filter(p => p.clearance !== 'yes').length;
-  const present = activeDay ? ps.filter(p => { const v = p.attendance[activeDay]; return v === 'P' || v === 'L'; }).length : 0;
-  const dayName = (S.days.find(d => d.id === activeDay) || {}).label || 'today';
-  const items = [
-    { n: ps.length, l: 'Players', f: 'all' },
-    { n: cleared, l: 'Cleared', f: null, cls: 'good' },
-    { n: needs, l: 'Need clearance', f: 'nocl', cls: needs ? 'alert' : '' },
-    { n: present, l: 'Here ' + dayName, f: null }
-  ];
-  $('#stats').innerHTML = items.map(i =>
-    '<button class="stat ' + (i.cls || '') + '"' + (i.f ? ' data-act="filter" data-f="' + i.f + '"' : ' disabled') + '>' +
-    '<span class="n">' + i.n + '</span><span class="l">' + esc(i.l) + '</span></button>'
+  const lvl = levelCol();
+  const cards = [{ n: ps.length, l: 'Players', act: 'statall' }];
+
+  if (lvl) {
+    const key = 'cc:' + lvl.id;
+    const counts = {};
+    ps.forEach(p => { const v = customValue(p, lvl.id) || '—'; counts[v] = (counts[v] || 0) + 1; });
+
+    // The coach's own order first, then anything typed straight into the sheet.
+    const opts = (lvl.options || []).map(o => o.value);
+    Object.keys(counts).forEach(v => { if (v !== '—' && opts.indexOf(v) < 0) opts.push(v); });
+
+    opts.slice(0, 6).forEach((v, i) => {
+      cards.push({ n: counts[v] || 0, l: v, act: 'statlvl', g: key, v: v,
+                   cls: 'tone-' + optionTone(v, i), on: picked(key, v) });
+    });
+    cards.push({ n: counts['—'] || 0, l: 'Not selected', act: 'statlvl', g: key, v: '—',
+                 cls: (counts['—'] ? 'alert' : ''), on: picked(key, '—') });
+  } else {
+    // No Level column: say so, and make the card the way to add one.
+    cards.push({ n: '—', l: 'No Level column', act: 'managecols' });
+  }
+
+  $('#stats').innerHTML = cards.map(c =>
+    '<button class="stat ' + (c.cls || '') + (c.on ? ' on' : '') + '"' +
+    ' data-act="' + c.act + '"' +
+    (c.g ? ' data-g="' + esc(c.g) + '" data-v="' + esc(c.v) + '"' : '') +
+    (c.on ? ' aria-pressed="true"' : '') + '>' +
+    '<span class="n">' + esc(c.n) + '</span><span class="l">' + esc(c.l) + '</span></button>'
   ).join('');
 }
 
@@ -5721,6 +5768,13 @@ document.addEventListener('click', e => {
     case 'grpvalcol': toggleGroupValue(el.dataset.g, el.dataset.v); refreshColumnMenu(el.dataset.g); return;
     case 'grpclearcol': clearGroup(el.dataset.g); refreshColumnMenu(el.dataset.g); return;
     case 'grpallcol': pickAllInColumn(el.dataset.g); refreshColumnMenu(el.dataset.g); return;
+    // The squad cards across the top are the same tick as the Level column's own
+    // menu, so clicking one there and unticking it here can never disagree.
+    case 'statlvl':  toggleGroupValue(el.dataset.g, el.dataset.v); break;
+    case 'statall':  clearGroupFilters(); filter = 'all'; query = '';
+                     if ($('#search')) $('#search').value = '';
+                     if ($('#searchClear')) $('#searchClear').hidden = true;
+                     rememberUiState(); renderAll(); break;
     case 'clrgroups': clearGroupFilters(); refreshViewPanel(); return;
     case 'addcol':   submitNewColumn(); break;
     case 'delcol':   removeCustomCol(el.dataset.c); break;
@@ -6043,7 +6097,10 @@ applyAddbar();
 /* Refresh means "bring in what the source has", and in Sheets mode the source
    is the Sheet, not the file on this disk. */
 function refreshSource(opts) { return sheetsOn() ? pullFromSheets(opts) : refreshFromFile(opts); }
-$('#refreshBtn').addEventListener('click', () => refreshSource());
+/* The Refresh button is gone. With Sheets mode off and no linked workbook it
+   only opened a file picker, which is not what the word promises. Loading is
+   reachable where it belongs: Open -> Open the Google Sheet, or Open a
+   spreadsheet. refreshSource() itself stays - the conflict dialogs call it. */
 $('#syncChip').addEventListener('click', () => sheetsChipClicked());
 $('#colsBtn').addEventListener('click', () => { closeMenus(); openColumnManager(); });
 $('#viewBtn').addEventListener('click', () => { closeMenus(); openViewPanel(); });
@@ -6120,7 +6177,8 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) { e.preventDefault(); return runDiagnostics(); }
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey && !typing) { e.preventDefault(); return undo(); }
   if ((e.ctrlKey || e.metaKey) && ((e.key === 'y' || e.key === 'Y') || ((e.key === 'z' || e.key === 'Z') && e.shiftKey)) && !typing) { e.preventDefault(); return redo(); }
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R') && !e.shiftKey) { e.preventDefault(); return refreshSource(); }
+  // Ctrl+R is the browser's own reload again, now that the button is gone: a
+  // hidden shortcut for a control nobody can see is a trap, not a feature.
   if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
     e.preventDefault();
     return saveToOrigin();
