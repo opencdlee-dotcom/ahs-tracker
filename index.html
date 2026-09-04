@@ -1862,7 +1862,12 @@ function renderStats() {
     const opts = (lvl.options || []).map(o => o.value);
     Object.keys(counts).forEach(v => { if (v !== '—' && opts.indexOf(v) < 0) opts.push(v); });
 
-    opts.slice(0, 6).forEach((v, i) => {
+    /* Every value gets a card. Capping the list at six silently dropped any
+       level beyond that: those athletes appeared in no squad card AND not in
+       "Not selected" either, so the numbers stopped adding up to the roster
+       with no sign that anything was missing. The strip scrolls sideways, and
+       a column may hold at most 24 choices anyway. */
+    opts.forEach((v, i) => {
       cards.push({ n: counts[v] || 0, l: v, act: 'statlvl', g: key, v: v,
                    cls: 'tone-' + optionTone(v, i), on: picked(key, v) });
     });
@@ -6434,6 +6439,7 @@ window.AHS = {
   openSheetDoc: openSheetDoc, validSheetDocUrl: validSheetDocUrl, _noteSheetDoc: noteSheetDoc,
   _sheetsToWorkbook: sheetsToWorkbook,
   saveDestination: saveDestination, saveToOrigin: saveToOrigin, _relayout: relayout,
+  hasFSA: () => FSA,
   _migrateProbe: o => migrate(Object.assign({ days: [], players: [] }, o)),
   _setHandle: h => { fileHandle = h; fileHandleName = h ? h.name : ''; }
 };
